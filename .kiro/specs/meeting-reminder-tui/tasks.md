@@ -36,34 +36,14 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 1: Chronological Meeting Order**
     - **Validates: Requirements 1.2**
   
-  - [x] 2.5 Implement domain events
-    - Create DomainEvent abstract record base type
-    - Implement CalendarEventsUpdated event
-    - Implement NotificationStateChanged event
-    - Implement MeetingAcknowledged event
+  - [x] 2.5 Implement message types for channel communication
+    - Create CalendarEventsUpdated record
+    - Create NotificationStateChanged record
+    - Create MeetingAcknowledged record
     - _Requirements: 7.4, 8.4_
 
-- [ ] 3. Implement event bus infrastructure
-  - [ ] 3.1 Create IEventBus interface
-    - Define Publish<TEvent> method
-    - Define Subscribe<TEvent> method returning IDisposable
-    - _Requirements: 11.2_
-  
-  - [ ] 3.2 Implement InMemoryEventBus with BlockingCollection
-    - Use ConcurrentDictionary for subscriptions
-    - Use BlockingCollection for event queue
-    - Implement background processing task
-    - Handle subscription disposal
-    - _Requirements: 11.2_
-  
-  - [ ]* 3.3 Write unit tests for event bus
-    - Test publish/subscribe functionality
-    - Test multiple subscribers
-    - Test subscription disposal
-    - Test error isolation between handlers
-
-- [ ] 4. Implement configuration management
-  - [ ] 4.1 Create configuration models
+- [ ] 3. Implement configuration management
+  - [ ] 3.1 Create configuration models
     - Implement AppConfiguration record
     - Implement NotificationThresholds record
     - Implement CalendarConfiguration record
@@ -81,16 +61,16 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 28: Configuration Application**
     - **Validates: Requirements 10.2, 10.3, 10.4, 10.5**
   
-  - [ ]* 4.4 Write unit tests for configuration loading
+  - [ ]* 3.4 Write unit tests for configuration loading
     - Test default configuration when file missing
     - Test JSON parsing errors
     - Test invalid configuration values
 
-- [ ] 5. Checkpoint - Ensure all tests pass
+- [ ] 4. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Implement meeting link extraction use case
-  - [ ] 6.1 Create ExtractMeetingLinkQuery and handler
+- [ ] 5. Implement meeting link extraction use case
+  - [ ] 5.1 Create ExtractMeetingLinkQuery and handler
     - Implement regex patterns for Google Meet, Zoom, Teams
     - Prioritize video conferencing links over generic URLs
     - Return Result<MeetingLink?>
@@ -108,13 +88,13 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 14: Video Conferencing Link Prioritization**
     - **Validates: Requirements 4.3**
   
-  - [ ]* 6.5 Write unit tests for link extraction edge cases
+  - [ ]* 5.5 Write unit tests for link extraction edge cases
     - Test events with no links
     - Test events with multiple links
     - Test malformed URLs
 
-- [ ] 7. Implement notification level calculation use case
-  - [ ] 7.1 Create CalculateNotificationLevelQuery and handler
+- [ ] 6. Implement notification level calculation use case
+  - [ ] 6.1 Create CalculateNotificationLevelQuery and handler
     - Implement threshold-based level calculation
     - Handle all-day event suppression
     - Apply notification time window rules
@@ -133,14 +113,14 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 30: Notification Time Window Enforcement**
     - **Validates: Requirements 10.8, 10.9**
   
-  - [ ]* 7.5 Write unit tests for notification thresholds
+  - [ ]* 6.5 Write unit tests for notification thresholds
     - Test gentle threshold
     - Test moderate threshold
     - Test urgent threshold
     - Test critical (at start time)
 
-- [ ] 8. Implement calendar source abstractions and Google Calendar integration
-  - [ ] 8.1 Create ICalendarSource interface
+- [ ] 7. Implement calendar source abstractions and Google Calendar integration
+  - [ ] 7.1 Create ICalendarSource interface
     - Define FetchEventsAsync returning Result<IReadOnlyList<MeetingEvent>, CalendarError>
     - Define SourceName property
     - _Requirements: 5.1, 5.2_
@@ -157,14 +137,14 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 16: Time Window Event Filtering**
     - **Validates: Requirements 5.5**
   
-  - [ ]* 8.4 Write unit tests for Google Calendar integration
+  - [ ]* 7.4 Write unit tests for Google Calendar integration
     - Test authentication flow
     - Test authentication failure handling
     - Test rate limit handling
     - Test event mapping
 
-- [ ] 9. Implement iCal calendar integration
-  - [ ] 9.1 Implement ICalSource
+- [ ] 8. Implement iCal calendar integration
+  - [ ] 8.1 Implement ICalSource
     - Fetch iCal data via HTTP
     - Parse iCal using Ical.Net library
     - Map iCal events to MeetingEvent domain model
@@ -180,16 +160,16 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 19: Malformed iCal Handling**
     - **Validates: Requirements 6.5**
   
-  - [ ]* 9.4 Write unit tests for iCal integration
+  - [ ]* 8.4 Write unit tests for iCal integration
     - Test successful iCal fetch and parse
     - Test unreachable URL handling
     - Test malformed iCal data
 
-- [ ] 10. Checkpoint - Ensure all tests pass
+- [ ] 9. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Implement fetch calendar events use case
-  - [ ] 11.1 Create FetchCalendarEventsQuery and handler
+- [ ] 10. Implement fetch calendar events use case
+  - [ ] 10.1 Create FetchCalendarEventsQuery and handler
     - Accept multiple ICalendarSource instances
     - Fetch from all sources concurrently
     - Aggregate results, succeeding if at least one source works
@@ -200,20 +180,20 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 18: Multiple Calendar Source Support**
     - **Validates: Requirements 6.4**
   
-  - [ ]* 11.3 Write property test for calendar source failure resilience
+  - [ ]* 10.3 Write property test for calendar source failure resilience
     - **Property 32: Calendar Source Failure Resilience**
     - **Validates: Requirements 12.4**
 
-- [ ] 12. Implement calendar polling service
-  - [ ] 12.1 Create CalendarPollingService
+- [ ] 11. Implement calendar polling service
+  - [ ] 11.1 Create CalendarPollingService
     - Use Timer for periodic polling at configured interval
     - Call FetchCalendarEventsHandler
     - Detect added and removed meetings
-    - Publish CalendarEventsUpdated events to event bus
+    - Write CalendarEventsUpdated messages to calendar channel
     - Use SemaphoreSlim to prevent overlapping polls
     - _Requirements: 7.1, 7.3, 7.4, 7.5_
   
-  - [ ]* 12.2 Write property test for polling interval adherence
+  - [ ]* 11.2 Write property test for polling interval adherence
     - **Property 20: Polling Interval Adherence**
     - **Validates: Requirements 7.1, 7.3**
   
@@ -221,13 +201,13 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 21: Removed Meeting Notification Termination**
     - **Validates: Requirements 7.4**
   
-  - [ ]* 12.4 Write unit tests for polling service
+  - [ ]* 11.4 Write unit tests for polling service
     - Test default 5-minute interval
     - Test custom interval configuration
     - Test meeting change detection
 
-- [ ] 13. Implement notification strategies
-  - [ ] 13.1 Create INotificationStrategy interface
+- [ ] 12. Implement notification strategies
+  - [ ] 12.1 Create INotificationStrategy interface
     - Define ExecuteAsync returning Result<Unit, NotificationError>
     - Define StrategyName and IsSupported properties
     - _Requirements: 9.1, 9.2_
@@ -255,22 +235,22 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - Check platform support
     - _Requirements: 9.7, 9.8_
   
-  - [ ]* 13.6 Write unit tests for notification strategies
+  - [ ]* 12.6 Write unit tests for notification strategies
     - Test platform compatibility checks
     - Test strategy execution
     - Test error handling
 
-- [ ] 14. Implement notification processing service
-  - [ ] 14.1 Create NotificationProcessingService
-    - Subscribe to CalendarEventsUpdated events
+- [ ] 13. Implement notification processing service
+  - [ ] 13.1 Create NotificationProcessingService
+    - Read from calendar channel in background task
     - Maintain dictionary of MeetingState
     - Use Timer to process notifications every 10 seconds
     - Calculate notification levels for all unacknowledged meetings
     - Execute enabled notification strategies
-    - Publish NotificationStateChanged events
+    - Write NotificationStateChanged messages to notification channel
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 9.2, 9.3_
   
-  - [ ]* 14.2 Write property test for enabled strategies execution
+  - [ ]* 13.2 Write property test for enabled strategies execution
     - **Property 27: Enabled Strategies Execution**
     - **Validates: Requirements 9.2, 9.3**
   
@@ -278,24 +258,24 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 31: Notification Strategy Failure Isolation**
     - **Validates: Requirements 12.3**
   
-  - [ ]* 14.4 Write property test for persistent critical notifications
+  - [ ]* 13.4 Write property test for persistent critical notifications
     - **Property 25: Persistent Critical Notifications**
     - **Validates: Requirements 8.4**
 
-- [ ] 15. Checkpoint - Ensure all tests pass
+- [ ] 14. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Implement acknowledge meeting use case
-  - [ ] 16.1 Create AcknowledgeMeetingCommand and handler
+- [ ] 15. Implement acknowledge meeting use case
+  - [ ] 15.1 Create AcknowledgeMeetingCommand and handler
     - Accept meeting ID and openLink flag
     - Get meeting state from repository
     - Open browser if requested using IBrowserLauncher
     - Mark meeting as acknowledged
-    - Publish MeetingAcknowledged event
+    - Write MeetingAcknowledged message to acknowledgement channel
     - Return Result<Unit, NotificationError>
     - _Requirements: 3.2, 3.7_
   
-  - [ ] 16.2 Implement IBrowserLauncher and SystemBrowserLauncher
+  - [ ] 15.2 Implement IBrowserLauncher and SystemBrowserLauncher
     - Windows: Use Process.Start with UseShellExecute
     - Linux: Use xdg-open
     - macOS: Use open command
@@ -310,23 +290,23 @@ This implementation plan breaks down the Meeting Reminder TUI application into d
     - **Property 10: Open Link Action Completeness**
     - **Validates: Requirements 3.7**
   
-  - [ ]* 16.5 Write unit tests for browser launching
+  - [ ]* 15.5 Write unit tests for browser launching
     - Test URL opening on different platforms
     - Test error handling for invalid URLs
 
-- [ ] 17. Implement meeting repository
-  - [ ] 17.1 Create IMeetingRepository interface
+- [ ] 16. Implement meeting repository
+  - [ ] 16.1 Create IMeetingRepository interface
     - Define GetByIdAsync, GetAllAsync, UpdateAsync
     - All methods return Result types
     - _Requirements: 3.5_
   
-  - [ ] 17.2 Implement InMemoryMeetingRepository
+  - [ ] 16.2 Implement InMemoryMeetingRepository
     - Use ConcurrentDictionary for thread-safe storage
     - Implement all interface methods
     - _Requirements: 3.5_
 
-- [ ] 18. Implement Spectre.Console TUI
-  - [ ] 18.1 Create IUserInterface abstraction
+- [ ] 17. Implement Spectre.Console TUI
+  - [ ] 17.1 Create IUserInterface abstraction
     - Define RunAsync method
     - Define event handlers for user actions
     - _Requirements: 11.2, 11.3, 13.1_

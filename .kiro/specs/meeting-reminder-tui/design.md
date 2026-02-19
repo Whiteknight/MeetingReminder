@@ -15,7 +15,7 @@ Key design principles:
 - **Vertical Slices**: Features organized by use case rather than technical layer
 - **Result Pattern**: All operations return `Result<T>` or `Result<T, TError>` instead of throwing exceptions
 - **Structured Errors**: Error objects with codes, messages, and context instead of exceptions
-- **Thread Safety**: Polling and notification on separate threads with pub/sub communication
+- **Thread Safety**: Polling and notification on separate threads with channel-based communication
 - **Modularity**: Core library with vendor-specific logic in separate projects
 - **Extensibility**: Interface-based design allows for future implementations
 
@@ -60,7 +60,8 @@ graph TB
     Console[Console TUI]
     App[Application Core]
     Domain[Domain Layer]
-    EventBus[Event Bus - Pub/Sub]
+    CalendarChannel[Calendar Events Channel]
+    NotificationChannel[Notification State Channel]
     PollingThread[Calendar Polling Thread]
     NotifThread[Notification Thread]
     GoogleCal[Google Calendar Library]
@@ -69,9 +70,11 @@ graph TB
     
     Console --> App
     App --> Domain
-    App --> EventBus
-    PollingThread --> EventBus
-    NotifThread --> EventBus
+    PollingThread -->|writes| CalendarChannel
+    NotifThread -->|reads| CalendarChannel
+    NotifThread -->|writes| NotificationChannel
+    Console -->|reads| NotificationChannel
+    Console -->|reads| CalendarChannel
     PollingThread --> GoogleCal
     PollingThread --> iCal
     NotifThread --> NotifLib
@@ -82,7 +85,8 @@ graph TB
     end
     
     subgraph "Infrastructure"
-        EventBus
+        CalendarChannel
+        NotificationChannel
         PollingThread
         NotifThread
     end
@@ -96,51 +100,62 @@ graph TB
 
 ### Threading Model
 
-The application uses three primary threads:
+The application uses three primary threads communicating via `System.Threading.Channels`:
 
 1. **Main Thread (UI Thread)**:
    - Runs Spectre.Console TUI
    - Handles user input
-   - Subscribes to events from event bus
-   - Updates display based on events
-   - Subscribes to `CalendarEventsUpdated` events to update the UI
+   - Reads from calendar and notification channels
+   - Updates display based on channel messages
 
 2. **Calendar Polling Thread**:
    - Polls calendar sources at configured interval
-   - Publishes `CalendarEventsUpdated` events to event bus
+   - Writes `CalendarEventsUpdated` messages to calendar channel
    - Runs independently, never blocks UI
 
 3. **Notification Thread**:
-   - Subscribes to `CalendarEventsUpdated` events
+   - Reads from calendar channel
    - Calculates notification levels
    - Executes notification strategies
-   - Publishes `NotificationStateChanged` events
+   - Writes `NotificationStateChanged` messages to notification channel
 
-**Event Bus Implementation**:
+**Channel-Based Communication**:
 ```csharp
-// Uses BlockingCollection<T> for thread-safe pub/sub
-public interface IEventBus
+// Channels are created at startup in Program.cs
+var calendarChannel = Channel.CreateUnbounded<CalendarEventsUpdated>();
+var notificationChannel = Channel.CreateUnbounded<NotificationStateChanged>();
+
+// Calendar thread writes
+await calendarChannel.Writer.WriteAsync(new CalendarEventsUpdated(...));
+
+// Notification thread reads
+await foreach (var update in calendarChannel.Reader.ReadAllAsync(cancellationToken))
 {
-    void Publish<TEvent>(TEvent @event) where TEvent : DomainEvent;
-    IDisposable Subscribe<TEvent>(Action<TEvent> handler) where TEvent : DomainEvent;
+    ProcessCalendarUpdate(update);
 }
 
-// Events are immutable records inheriting from abstract DomainEvent
-public abstract record DomainEvent(DateTime OccurredAt);
+// UI thread reads (non-blocking)
+if (calendarChannel.Reader.TryRead(out var update))
+{
+    UpdateDisplay(update);
+}
+```
 
+**Message Types** (immutable records):
+```csharp
 public record CalendarEventsUpdated(
     IReadOnlyList<MeetingEvent> AllEvents,
     IReadOnlyList<MeetingEvent> AddedEvents,
     IReadOnlyList<string> RemovedEventIds,
-    DateTime OccurredAt) : DomainEvent(OccurredAt);
+    DateTime OccurredAt);
 
 public record NotificationStateChanged(
     IReadOnlyList<MeetingState> ActiveNotifications,
-    DateTime OccurredAt) : DomainEvent(OccurredAt);
+    DateTime OccurredAt);
 
 public record MeetingAcknowledged(
     string MeetingId,
-    DateTime AcknowledgedAt) : DomainEvent(AcknowledgedAt);
+    DateTime AcknowledgedAt);
 ```
 
 ### Layer Responsibilities
@@ -150,7 +165,7 @@ public record MeetingAcknowledged(
 - `MeetingLink`: Value object for meeting URLs
 - `NotificationLevel`: Enum for urgency levels
 - `MeetingState`: Entity tracking notification state
-- Domain events: `CalendarEventsUpdated`, `NotificationStateChanged`, etc.
+- Message types: `CalendarEventsUpdated`, `NotificationStateChanged`, etc.
 - Domain errors: `CalendarError`, `NotificationError`, `ConfigurationError`
 
 **Application Layer** (depends only on Domain):
@@ -162,7 +177,7 @@ public record MeetingAcknowledged(
 **Infrastructure Layer**:
 - Implements application abstractions
 - Configuration management
-- Event bus implementation
+- Channel setup and management
 - Logging infrastructure
 - No business logic
 
@@ -377,24 +392,22 @@ public class MeetingState
 **Domain Events**:
 
 ```csharp
-// Abstract base record for all domain events
-// Provides default immutability and low-boilerplate event definitions
-public abstract record DomainEvent(DateTime OccurredAt);
-
+// Message types for channel communication
+// These are immutable records but don't need to inherit from a base type
 public record CalendarEventsUpdated(
     IReadOnlyList<MeetingEvent> AllEvents,
     IReadOnlyList<MeetingEvent> AddedEvents,
     IReadOnlyList<string> RemovedEventIds,
-    DateTime OccurredAt) : DomainEvent(OccurredAt);
+    DateTime OccurredAt);
 
 public record NotificationStateChanged(
     IReadOnlyList<MeetingState> ActiveNotifications,
-    DateTime OccurredAt) : DomainEvent(OccurredAt);
+    DateTime OccurredAt);
 
 public record MeetingAcknowledged(
     string MeetingId,
     bool LinkOpened,
-    DateTime OccurredAt) : DomainEvent(OccurredAt);
+    DateTime OccurredAt);
 ```
 
 ### Application Layer - Use Cases
@@ -502,7 +515,7 @@ public record AcknowledgeMeetingCommand(
 // Handler
 public class AcknowledgeMeetingHandler
 {
-    private readonly IEventBus _eventBus;
+    private readonly ChannelWriter<MeetingAcknowledged> _acknowledgementChannel;
     private readonly IBrowserLauncher _browserLauncher;
     private readonly IMeetingRepository _meetingRepository;
     
@@ -539,8 +552,8 @@ public class AcknowledgeMeetingHandler
         meetingState.Acknowledge();
         await _meetingRepository.UpdateAsync(meetingState);
         
-        // Publish event
-        _eventBus.Publish(new MeetingAcknowledged(
+        // Write to channel
+        await _acknowledgementChannel.WriteAsync(new MeetingAcknowledged(
             command.MeetingId,
             command.OpenLink,
             DateTime.UtcNow));
@@ -647,13 +660,6 @@ public interface IMeetingRepository
     Task<Result<IReadOnlyList<MeetingState>, Error>> GetAllAsync();
     Task<Result<Unit, Error>> UpdateAsync(MeetingState state);
 }
-
-// Event bus abstraction
-public interface IEventBus
-{
-    void Publish<TEvent>(TEvent @event) where TEvent : DomainEvent;
-    IDisposable Subscribe<TEvent>(Action<TEvent> handler) where TEvent : DomainEvent;
-}
 ```
 
 ## Data Models
@@ -721,91 +727,13 @@ public record CalendarNotificationRules(
 }
 ```
 
-### Infrastructure - Event Bus Implementation
-
-```csharp
-public class InMemoryEventBus : IEventBus, IDisposable
-{
-    private readonly ConcurrentDictionary<Type, List<Delegate>> _subscriptions = new();
-    private readonly BlockingCollection<(Type EventType, object Event)> _eventQueue = new();
-    private readonly CancellationTokenSource _cts = new();
-    private readonly Task _processingTask;
-    
-    public InMemoryEventBus()
-    {
-        _processingTask = Task.Run(ProcessEvents);
-    }
-    
-    public void Publish<TEvent>(TEvent @event) where TEvent : DomainEvent
-    {
-        _eventQueue.Add((typeof(TEvent), @event));
-    }
-    
-    public IDisposable Subscribe<TEvent>(Action<TEvent> handler) 
-        where TEvent : DomainEvent
-    {
-        var eventType = typeof(TEvent);
-        _subscriptions.AddOrUpdate(
-            eventType,
-            _ => new List<Delegate> { handler },
-            (_, list) => { list.Add(handler); return list; });
-        
-        return new Subscription(() => Unsubscribe(eventType, handler));
-    }
-    
-    private void Unsubscribe<TEvent>(Type eventType, Action<TEvent> handler)
-    {
-        if (_subscriptions.TryGetValue(eventType, out var handlers))
-            handlers.Remove(handler);
-    }
-    
-    private async Task ProcessEvents()
-    {
-        foreach (var (eventType, @event) in _eventQueue.GetConsumingEnumerable(_cts.Token))
-        {
-            if (_subscriptions.TryGetValue(eventType, out var handlers))
-            {
-                foreach (var handler in handlers.ToList())
-                {
-                    try
-                    {
-                        handler.DynamicInvoke(@event);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log error but continue processing
-                        Console.Error.WriteLine($"Event handler error: {ex.Message}");
-                    }
-                }
-            }
-        }
-    }
-    
-    public void Dispose()
-    {
-        _cts.Cancel();
-        _eventQueue.CompleteAdding();
-        _processingTask.Wait(TimeSpan.FromSeconds(5));
-        _eventQueue.Dispose();
-        _cts.Dispose();
-    }
-    
-    private class Subscription : IDisposable
-    {
-        private readonly Action _unsubscribe;
-        public Subscription(Action unsubscribe) => _unsubscribe = unsubscribe;
-        public void Dispose() => _unsubscribe();
-    }
-}
-```
-
 ### Infrastructure - Calendar Polling Service
 
 ```csharp
 public class CalendarPollingService : IDisposable
 {
     private readonly IEnumerable<ICalendarSource> _sources;
-    private readonly IEventBus _eventBus;
+    private readonly ChannelWriter<CalendarEventsUpdated> _calendarChannel;
     private readonly AppConfiguration _config;
     private readonly Timer _timer;
     private readonly SemaphoreSlim _pollLock = new(1, 1);
@@ -813,11 +741,11 @@ public class CalendarPollingService : IDisposable
     
     public CalendarPollingService(
         IEnumerable<ICalendarSource> sources,
-        IEventBus eventBus,
+        ChannelWriter<CalendarEventsUpdated> calendarChannel,
         AppConfiguration config)
     {
         _sources = sources;
-        _eventBus = eventBus;
+        _calendarChannel = calendarChannel;
         _config = config;
         _timer = new Timer(
             _ => _ = PollAsync(),
@@ -854,8 +782,8 @@ public class CalendarPollingService : IDisposable
                     .Where(id => !currentEvents.ContainsKey(id))
                     .ToList();
                 
-                // Publish update event
-                _eventBus.Publish(new CalendarEventsUpdated(
+                // Write to channel
+                await _calendarChannel.WriteAsync(new CalendarEventsUpdated(
                     currentEvents.Values.ToList().AsReadOnly(),
                     added.AsReadOnly(),
                     removed.AsReadOnly(),
@@ -883,26 +811,29 @@ public class CalendarPollingService : IDisposable
 ```csharp
 public class NotificationProcessingService : IDisposable
 {
-    private readonly IEventBus _eventBus;
+    private readonly ChannelReader<CalendarEventsUpdated> _calendarChannel;
+    private readonly ChannelWriter<NotificationStateChanged> _notificationChannel;
     private readonly IEnumerable<INotificationStrategy> _strategies;
     private readonly AppConfiguration _config;
     private readonly Dictionary<string, MeetingState> _meetingStates = new();
-    private readonly IDisposable _subscription;
     private readonly Timer _notificationTimer;
+    private readonly CancellationTokenSource _cts = new();
     
     public NotificationProcessingService(
-        IEventBus eventBus,
+        ChannelReader<CalendarEventsUpdated> calendarChannel,
+        ChannelWriter<NotificationStateChanged> notificationChannel,
         IEnumerable<INotificationStrategy> strategies,
         AppConfiguration config)
     {
-        _eventBus = eventBus;
+        _calendarChannel = calendarChannel;
+        _notificationChannel = notificationChannel;
         _strategies = strategies.Where(s => 
             config.EnabledNotificationStrategies.Contains(s.StrategyName) && 
             s.IsSupported);
         _config = config;
         
-        // Subscribe to calendar updates
-        _subscription = _eventBus.Subscribe<CalendarEventsUpdated>(OnCalendarUpdated);
+        // Start reading from calendar channel
+        _ = Task.Run(ReadCalendarUpdatesAsync);
         
         // Process notifications every 10 seconds
         _notificationTimer = new Timer(
@@ -912,14 +843,22 @@ public class NotificationProcessingService : IDisposable
             TimeSpan.FromSeconds(10));
     }
     
-    private void OnCalendarUpdated(CalendarEventsUpdated @event)
+    private async Task ReadCalendarUpdatesAsync()
+    {
+        await foreach (var update in _calendarChannel.ReadAllAsync(_cts.Token))
+        {
+            OnCalendarUpdated(update);
+        }
+    }
+    
+    private void OnCalendarUpdated(CalendarEventsUpdated update)
     {
         // Remove acknowledged or deleted meetings
-        foreach (var removedId in @event.RemovedEventIds)
+        foreach (var removedId in update.RemovedEventIds)
             _meetingStates.Remove(removedId);
         
         // Add or update meeting states
-        foreach (var meeting in @event.AllEvents)
+        foreach (var meeting in update.AllEvents)
         {
             if (!_meetingStates.ContainsKey(meeting.Id))
             {
@@ -978,10 +917,10 @@ public class NotificationProcessingService : IDisposable
             }
         }
         
-        // Publish notification state update
+        // Write notification state update to channel
         if (activeNotifications.Any())
         {
-            _eventBus.Publish(new NotificationStateChanged(
+            _notificationChannel.TryWrite(new NotificationStateChanged(
                 activeNotifications.AsReadOnly(),
                 DateTime.UtcNow));
         }
@@ -989,7 +928,7 @@ public class NotificationProcessingService : IDisposable
     
     public void Dispose()
     {
-        _subscription?.Dispose();
+        _cts.Cancel();
         _notificationTimer?.Dispose();
     }
 }
@@ -1021,9 +960,11 @@ public class NotificationProcessingService : IDisposable
 ### Data Flow
 
 ```
-Calendar Sources → Polling Service → Event Bus → Notification Service
-                                   ↓
-                              UI Subscriber
+Calendar Sources → Polling Service → Calendar Channel → Notification Service
+                                   ↓                    ↓
+                              UI Reader            Notification Channel
+                                                        ↓
+                                                   UI Reader
 ```
 
 ### Urgency Ordering Algorithm
