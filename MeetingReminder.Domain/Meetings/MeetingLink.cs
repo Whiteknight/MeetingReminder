@@ -3,10 +3,10 @@ using static MeetingReminder.Domain.Assert;
 namespace MeetingReminder.Domain.Meetings;
 
 /// <summary>
-/// Value object representing a meeting link extracted from a calendar event.
-/// Immutable record that contains the URL and its detected type.
+/// Base record representing a meeting link extracted from a calendar event.
+/// Use the specific subclasses for known video conferencing providers.
 /// </summary>
-public record MeetingLink
+public abstract record MeetingLink
 {
     /// <summary>
     /// The URL of the meeting link
@@ -14,13 +14,44 @@ public record MeetingLink
     public string Url { get; init; }
 
     /// <summary>
-    /// The type of meeting link (Google Meet, Zoom, Teams, or Other)
+    /// Indicates whether this is a known video conferencing link
     /// </summary>
-    public MeetingLinkType Type { get; init; }
+    public abstract bool IsVideoConferencing { get; }
 
-    public MeetingLink(string url, MeetingLinkType type)
+    protected MeetingLink(string url)
     {
         Url = NotNullOrEmpty(url);
-        Type = type;
     }
+}
+
+/// <summary>
+/// Google Meet video conferencing link
+/// </summary>
+public sealed record GoogleMeetLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => true;
+}
+
+/// <summary>
+/// Zoom video conferencing link
+/// </summary>
+public sealed record ZoomLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => true;
+}
+
+/// <summary>
+/// Microsoft Teams video conferencing link
+/// </summary>
+public sealed record MicrosoftTeamsLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => true;
+}
+
+/// <summary>
+/// Generic URL that doesn't match known video conferencing patterns
+/// </summary>
+public sealed record OtherLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => false;
 }

@@ -42,13 +42,16 @@ public class MeetingState
     /// Only allows escalation - notification level can only increase, never decrease.
     /// </summary>
     /// <param name="level">The new notification level</param>
-    public void UpdateNotificationLevel(NotificationLevel level)
+    /// <returns>True if the level was actually changed (escalated), false otherwise</returns>
+    public bool UpdateNotificationLevel(NotificationLevel level)
     {
         // Only allow escalation - notification level can only increase
         if (level > CurrentLevel)
         {
             CurrentLevel = level;
+            return true;
         }
+        return false;
     }
 
     /// <summary>

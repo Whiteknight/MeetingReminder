@@ -192,3 +192,27 @@ public readonly record struct Result<T, TE1> : IEquatable<T>
             static (v, o) => v!.Equals(o),
             static (_, _) => false);
 }
+
+public static class ResultMatchAsync
+{
+    public static async Task<TOut> MatchAsync<T, TE1, TOut>(
+        this Task<Result<T, TE1>> resultTask,
+        Func<T, TOut> onSuccess,
+        Func<TE1, TOut> onError)
+    {
+        Result<T, TE1> result = await resultTask.ConfigureAwait(false);
+        return result.Match(onSuccess, onError);
+    }
+}
+
+public static class ResultBindAsync
+{
+    public static async Task<Result<TOut, TE1>> BindAsync<T, TE1, TOut>(
+        this Task<Result<T, TE1>> resultTask,
+        Func<T, Result<TOut, TE1>> func)
+    {
+        Result<T, TE1> result = await resultTask.ConfigureAwait(false);
+        return result.Bind(func);
+    }
+}
+

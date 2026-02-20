@@ -14,10 +14,12 @@ Key design principles:
 - **Clean Architecture**: Dependencies point inward; domain has no external dependencies
 - **Vertical Slices**: Features organized by use case rather than technical layer
 - **Result Pattern**: All operations return `Result<T>` or `Result<T, TError>` instead of throwing exceptions
+- **No Nulls**: Avoid nullable types where possible; use Result pattern to represent absence of values
 - **Structured Errors**: Error objects with codes, messages, and context instead of exceptions
 - **Thread Safety**: Polling and notification on separate threads with channel-based communication
 - **Modularity**: Core library with vendor-specific logic in separate projects
 - **Extensibility**: Interface-based design allows for future implementations
+- **UTC Time Throughout**: All DateTime values in Domain, Application, and Infrastructure layers MUST use UTC. Local time conversion happens ONLY in the UI layer when displaying to users.
 
 ## Architecture
 
@@ -375,10 +377,18 @@ public class MeetingState
     public bool IsAcknowledged { get; private set; }
     public DateTime LastNotificationTime { get; private set; }
     
-    public void UpdateNotificationLevel(NotificationLevel level)
+    /// <summary>
+    /// Updates the notification level. Only allows escalation.
+    /// </summary>
+    /// <returns>True if the level actually changed (escalated), false otherwise</returns>
+    public bool UpdateNotificationLevel(NotificationLevel level)
     {
         if (level > CurrentLevel) // Only allow escalation
+        {
             CurrentLevel = level;
+            return true;
+        }
+        return false;
     }
     
     public void Acknowledge()
@@ -573,7 +583,7 @@ public struct Unit
 
 ```csharp
 // Query
-public record ExtractMeetingLinkQuery(MeetingEvent Meeting);
+public record ExtractMeetingLinkQuery(string? Description, string? Location);
 
 // Handler
 public class ExtractMeetingLinkHandler
@@ -591,18 +601,19 @@ public class ExtractMeetingLinkHandler
             RegexOptions.IgnoreCase)
     };
     
-    public Result<MeetingLink?> Handle(ExtractMeetingLinkQuery query)
+    public Result<MeetingLink, Error> Extract(ExtractMeetingLinkQuery query)
     {
-        var meeting = query.Meeting;
-        var searchText = $"{meeting.Description} {meeting.Location}";
+        var searchText = $"{query.Description ?? ""} {query.Location ?? ""}";
+        
+        if (string.IsNullOrWhiteSpace(searchText))
+            return MeetingLinkError.NoLinkFound();
         
         // Try to match video conferencing links first
         foreach (var (type, pattern) in LinkPatterns)
         {
             var match = pattern.Match(searchText);
             if (match.Success)
-                return Result<MeetingLink?>.Success(
-                    new MeetingLink(match.Value, type));
+                return new MeetingLink(match.Value, type);
         }
         
         // Try to match any URL as fallback
@@ -612,11 +623,10 @@ public class ExtractMeetingLinkHandler
         
         var genericMatch = genericUrlPattern.Match(searchText);
         if (genericMatch.Success)
-            return Result<MeetingLink?>.Success(
-                new MeetingLink(genericMatch.Value, MeetingLinkType.Other));
+            return new MeetingLink(genericMatch.Value, MeetingLinkType.Other);
         
-        // No link found
-        return Result<MeetingLink?>.Success(null);
+        // No link found - return error instead of null
+        return MeetingLinkError.NoLinkFound();
     }
 }
 ```
@@ -637,10 +647,27 @@ public interface ICalendarSource
 }
 
 // Notification strategy abstraction
+// Strategies support two trigger modes: per-cycle (for persistent reminders like beeps)
+// and on-level-change (for one-time notifications like toasts)
 public interface INotificationStrategy
 {
-    Task<Result<Unit, NotificationError>> ExecuteAsync(
+    /// <summary>
+    /// Executes on every notification processing cycle.
+    /// Use for persistent reminders (beeps, sounds).
+    /// Return success with no action if this strategy doesn't need per-cycle execution.
+    /// </summary>
+    Task<Result<Unit, NotificationError>> ExecuteOnCycleAsync(
         NotificationLevel level,
+        MeetingEvent meeting);
+    
+    /// <summary>
+    /// Executes only when notification level escalates (None→Gentle→Moderate→Urgent→Critical).
+    /// Use for one-time notifications (toasts, system notifications, terminal flash).
+    /// Return success with no action if this strategy doesn't need level-change execution.
+    /// </summary>
+    Task<Result<Unit, NotificationError>> ExecuteOnLevelChangeAsync(
+        NotificationLevel previousLevel,
+        NotificationLevel newLevel,
         MeetingEvent meeting);
     
     string StrategyName { get; }
@@ -688,9 +715,9 @@ public record NotificationThresholds(
     TimeSpan UrgentMinutes)
 {
     public static NotificationThresholds Default => new(
-        GentleMinutes: TimeSpan.FromMinutes(15),
-        ModerateMinutes: TimeSpan.FromMinutes(10),
-        UrgentMinutes: TimeSpan.FromMinutes(5));
+        GentleMinutes: TimeSpan.FromMinutes(10),
+        ModerateMinutes: TimeSpan.FromMinutes(5),
+        UrgentMinutes: TimeSpan.FromMinutes(1));
 }
 
 public record CalendarConfiguration(
@@ -904,12 +931,21 @@ public class NotificationProcessingService : IDisposable
             
             if (result.IsSuccess && result.Value != NotificationLevel.None)
             {
-                state.UpdateNotificationLevel(result.Value);
+                var previousLevel = state.CurrentLevel;
+                var levelChanged = state.UpdateNotificationLevel(result.Value);
                 
-                // Execute notification strategies
+                // Execute notification strategies with appropriate trigger modes
                 foreach (var strategy in _strategies)
                 {
-                    _ = strategy.ExecuteAsync(result.Value, state.Event);
+                    // Always execute per-cycle notifications (beeps, sounds)
+                    _ = strategy.ExecuteOnCycleAsync(state.CurrentLevel, state.Event);
+                    
+                    // Only execute level-change notifications when level actually escalated
+                    if (levelChanged)
+                    {
+                        _ = strategy.ExecuteOnLevelChangeAsync(
+                            previousLevel, state.CurrentLevel, state.Event);
+                    }
                 }
                 
                 state.LastNotificationTime = currentTime;

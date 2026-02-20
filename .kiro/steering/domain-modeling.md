@@ -8,14 +8,26 @@ inclusion: auto
 
 ### Current Domain Slices
 
+**Calendars Slice** (`MeetingReminder.Domain.Calendars`)
+- Interfaces: `ICalendarSource`
+- DTOs: `RawCalendarEvent`
+- Events: `CalendarEventsUpdated`
+- Errors: `CalendarError`
+
 **Meetings Slice** (`MeetingReminder.Domain.Meetings`)
 - Entities: `MeetingEvent`, `MeetingState`
-- Value Objects: `MeetingLink`, `MeetingLinkType`
-- Events: `CalendarEventsUpdated`, `MeetingAcknowledged`
+- Value Objects: `MeetingLink` (abstract), `GoogleMeetLink`, `ZoomLink`, `MicrosoftTeamsLink`, `OtherLink`
+- Events: `MeetingAcknowledged`
+- Errors: `MeetingLinkError`
 
 **Notifications Slice** (`MeetingReminder.Domain.Notifications`)
 - Enums: `NotificationLevel`
 - Events: `NotificationStateChanged`
+- Errors: `NotificationError`
+
+**Configuration Slice** (`MeetingReminder.Domain.Configuration`)
+- Interfaces: `IConfigurationManager`, `IAppConfiguration`, `INotificationThresholds`, etc.
+- Errors: `ConfigurationError`
 
 ### Adding New Domain Concepts
 
@@ -96,16 +108,31 @@ public class MeetingState
 
 ### Value Object Pattern
 ```csharp
-public record MeetingLink
+// Use abstract records with sealed subclasses for type hierarchies
+public abstract record MeetingLink
 {
     public string Url { get; init; }
-    public MeetingLinkType Type { get; init; }
-    
-    public MeetingLink(string url, MeetingLinkType type)
+    public abstract bool IsVideoConferencing { get; }
+
+    protected MeetingLink(string url)
     {
         Url = NotNullOrEmpty(url);
-        Type = type;
     }
+}
+
+public sealed record GoogleMeetLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => true;
+}
+
+public sealed record ZoomLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => true;
+}
+
+public sealed record OtherLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => false;
 }
 ```
 
@@ -160,8 +187,8 @@ public sealed record CalendarError(
 - Inherit from `Error` abstract record
 - Use sealed to prevent further inheritance
 - Include context via optional parameters
-- Place in `Errors/` folder (not in domain slices)
-- Use descriptive names: CalendarError, NotificationError, ConfigurationError
+- Place errors in the same folder as the domain types they relate to
+- Use descriptive names: CalendarError, NotificationError, ConfigurationError, MeetingLinkError
 
 ## Domain Logic Placement
 
@@ -237,5 +264,6 @@ public MeetingEvent(string id, string title, DateTime startTime, DateTime endTim
 - Describes what happened, not what should happen
 
 ### Enums
-- Singular noun: `NotificationLevel`, `MeetingLinkType`, `CalendarType`
+- Singular noun: `NotificationLevel`, `CalendarType`
 - Values are singular: `NotificationLevel.Gentle`, not `NotificationLevel.Gentles`
+- Prefer subclassed records over enums when behavior differs by type (e.g., `MeetingLink` hierarchy)

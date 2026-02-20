@@ -1,19 +1,47 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\MeetingReminder.Infrastructure\MeetingReminder.Infrastructure.csproj" />
-    <ProjectReference Include="..\MeetingReminder.GoogleCalendar\MeetingReminder.GoogleCalendar.csproj" />
-    <ProjectReference Include="..\MeetingReminder.ICal\MeetingReminder.ICal.csproj" />
-    <ProjectReference Include="..\MeetingReminder.Notifications\MeetingReminder.Notifications.csproj" />
+    <InternalsVisibleTo Include="MeetingReminder.ConsoleTui.Tests" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MeetingReminder.Application\MeetingReminder.Application.csproj" />
+    <ProjectReference Include="..\MeetingReminder.Infrastructure\MeetingReminder.Infrastructure.csproj" />
+    <ProjectReference Include="..\MeetingReminder.GoogleCalendar\MeetingReminder.GoogleCalendar.csproj" />
+  </ItemGroup>
+
+  <!-- Platform-specific project references -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <ProjectReference Include="..\MeetingReminder.Infrastructure.Windows\MeetingReminder.Infrastructure.Windows.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+    <ProjectReference Include="..\MeetingReminder.Infrastructure.Linux\MeetingReminder.Infrastructure.Linux.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.1" />
     <PackageReference Include="Spectre.Console" Version="0.54.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="config.template.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows10.0.17763.0</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Linux'))">net10.0</TargetFrameworks>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows')) And !$([MSBuild]::IsOSPlatform('Linux'))">net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

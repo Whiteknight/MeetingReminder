@@ -1,0 +1,361 @@
+using MeetingReminder.Application.UseCases;
+using MeetingReminder.ConsoleTui.Services;
+using MeetingReminder.Domain;
+using MeetingReminder.Domain.Browsers;
+using MeetingReminder.Domain.Calendars;
+using MeetingReminder.Domain.Configuration;
+using MeetingReminder.Domain.Meetings;
+using MeetingReminder.Domain.Messaging;
+using MeetingReminder.Domain.Notifications;
+using MeetingReminder.Infrastructure.Browser;
+using MeetingReminder.Infrastructure.Calendars;
+using MeetingReminder.Infrastructure.Configuration;
+using MeetingReminder.Infrastructure.Channels;
+using MeetingReminder.Infrastructure.ICal;
+using MeetingReminder.Infrastructure.Meetings;
+using MeetingReminder.Infrastructure.Notifications;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
+#if WINDOWS
+using MeetingReminder.Infrastructure.Windows.Notifications;
+#endif
+
+namespace MeetingReminder.ConsoleTui;
+
+/// <summary>
+/// Extension methods for configuring services in the DI container.
+/// </summary>
+public static class ServiceCollectionExtensions
+{
+    /// <summary>
+    /// Adds core infrastructure services including time provider and HTTP client.
+    /// </summary>
+    public static IServiceCollection AddCoreInfrastructure(this IServiceCollection services)
+    {
+        services.AddSingleton<ITimeProvider, SystemTimeProvider>();
+        services.AddHttpClient();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds configuration services and loads configuration from the specified path.
+    /// </summary>
+    public static IServiceCollection AddConfiguration(
+        this IServiceCollection services,
+        string configPath)
+    {
+        services.AddSingleton<IConfigurationManager>(
+            _ => new JsonConfigurationManager(configPath));
+
+        services.AddSingleton<IAppConfiguration>(sp =>
+        {
+            var configManager = sp.GetRequiredService<IConfigurationManager>();
+            var result = configManager.LoadConfiguration();
+            return result.Match(
+                config => config,
+                _ => AppConfiguration.Default);
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds calendar source implementations based on configuration.
+    /// </summary>
+    public static IServiceCollection AddCalendarSources(this IServiceCollection services)
+    {
+        services.AddSingleton<IEnumerable<ICalendarSource>>(sp =>
+        {
+            var config = sp.GetRequiredService<IAppConfiguration>();
+            var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+            var sources = new List<ICalendarSource>();
+
+            foreach (var calendarConfig in config.Calendars)
+            {
+                if (string.IsNullOrEmpty(calendarConfig.SourceUrl))
+                    continue;
+
+                var httpClient = httpClientFactory.CreateClient(calendarConfig.Name);
+                sources.Add(new IcsCalendarSource(httpClient, calendarConfig.SourceUrl, calendarConfig.Name));
+            }
+
+            return sources;
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds calendar event channels with fan-out support.
+    /// Creates separate channels for the TUI and notification processor so each
+    /// consumer gets its own copy of every message (channels are single-consumer queues).
+    /// The polling service writes to a FanOutChannelWriter that publishes to both.
+    /// </summary>
+    public static IServiceCollection AddCalendarChannel(this IServiceCollection services)
+    {
+        var tuiChannel = Channel.CreateUnbounded<CalendarEventsUpdated>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
+        var notificationChannel = Channel.CreateUnbounded<CalendarEventsUpdated>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+
+        // Fan-out writer: polling service writes once, both channels receive the message
+        var fanOutWriter = new FanOutChannelWriter<CalendarEventsUpdated>(
+            tuiChannel.Writer, notificationChannel.Writer);
+
+        services.AddSingleton(fanOutWriter);
+        services.AddSingleton<ChannelWriter<CalendarEventsUpdated>>(fanOutWriter);
+
+        // Keyed readers so each consumer resolves its own channel
+        services.AddKeyedSingleton("tui", tuiChannel.Reader);
+        services.AddKeyedSingleton("notifications", notificationChannel.Reader);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the FetchCalendarEvents use case.
+    /// </summary>
+    public static IServiceCollection AddCalendarUseCases(this IServiceCollection services)
+    {
+        services.AddSingleton<FetchCalendarEvents>(sp =>
+        {
+            var sources = sp.GetRequiredService<IEnumerable<ICalendarSource>>();
+            return new FetchCalendarEvents(sources);
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the calendar polling service as a hosted service.
+    /// </summary>
+    public static IServiceCollection AddCalendarPolling(this IServiceCollection services)
+    {
+        services.AddSingleton<ICalendarPollingService>(sp =>
+        {
+            var fetchCalendarEvents = sp.GetRequiredService<FetchCalendarEvents>();
+            var channelWriter = sp.GetRequiredService<ChannelWriter<CalendarEventsUpdated>>();
+            var config = sp.GetRequiredService<IAppConfiguration>();
+            var timeProvider = sp.GetRequiredService<ITimeProvider>();
+
+            return new CalendarPollingService(
+                fetchCalendarEvents,
+                channelWriter,
+                config,
+                timeProvider);
+        });
+
+        services.AddHostedService<CalendarPollingHostedService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the calendar display service for TUI updates.
+    /// This is the legacy single-panel display service.
+    /// </summary>
+    public static IServiceCollection AddCalendarDisplay(this IServiceCollection services)
+    {
+        services.AddHostedService<CalendarDisplayService>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the enhanced three-panel TUI service.
+    /// The event loop reads key presses via IKeyboardInputHandler (pure mapper),
+    /// then handles the resulting TuiCommand internally.
+    /// </summary>
+    public static IServiceCollection AddEnhancedTui(this IServiceCollection services)
+    {
+        services.AddSingleton<MeetingReminderTuiService>(sp =>
+        {
+            var calendarReader = sp.GetRequiredKeyedService<ChannelReader<CalendarEventsUpdated>>("tui");
+            var notificationReader = sp.GetRequiredService<ChannelReader<NotificationStateChanged>>();
+            var keyboardInputHandler = sp.GetRequiredService<IKeyboardInputHandler>();
+            var acknowledgeMeeting = sp.GetRequiredService<AcknowledgeMeeting>();
+            var lifetime = sp.GetRequiredService<IHostApplicationLifetime>();
+            var config = sp.GetRequiredService<IAppConfiguration>();
+            var timeProvider = sp.GetRequiredService<ITimeProvider>();
+            var logger = sp.GetRequiredService<ILogger<MeetingReminderTuiService>>();
+
+            return new MeetingReminderTuiService(
+                calendarReader,
+                notificationReader,
+                keyboardInputHandler,
+                acknowledgeMeeting,
+                lifetime,
+                config,
+                timeProvider,
+                logger);
+        });
+        services.AddHostedService(sp => sp.GetRequiredService<MeetingReminderTuiService>());
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the notification channel for pub/sub communication.
+    /// </summary>
+    public static IServiceCollection AddNotificationChannel(this IServiceCollection services)
+    {
+        var channel = Channel.CreateUnbounded<NotificationStateChanged>(
+            new UnboundedChannelOptions
+            {
+                SingleReader = false,
+                SingleWriter = true
+            });
+
+        services.AddSingleton(channel);
+        services.AddSingleton(channel.Reader);
+        services.AddSingleton(channel.Writer);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the acknowledgement channel for pub/sub communication.
+    /// </summary>
+    public static IServiceCollection AddAcknowledgementChannel(this IServiceCollection services)
+    {
+        var channel = Channel.CreateUnbounded<MeetingAcknowledged>(
+            new UnboundedChannelOptions
+            {
+                SingleReader = false,
+                SingleWriter = true
+            });
+
+        services.AddSingleton(channel);
+        services.AddSingleton(channel.Reader);
+        services.AddSingleton(channel.Writer);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the meeting repository for storing meeting state.
+    /// </summary>
+    public static IServiceCollection AddMeetingRepository(this IServiceCollection services)
+    {
+        services.AddSingleton<IMeetingRepository, InMemoryMeetingRepository>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the browser launcher for opening meeting links.
+    /// </summary>
+    public static IServiceCollection AddBrowserLauncher(this IServiceCollection services)
+    {
+        services.AddSingleton<IBrowserLauncher, SystemBrowserLauncher>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the AcknowledgeMeeting use case.
+    /// </summary>
+    public static IServiceCollection AddAcknowledgementUseCases(this IServiceCollection services)
+    {
+        services.AddSingleton<AcknowledgeMeeting>(sp =>
+        {
+            var meetingRepository = sp.GetRequiredService<IMeetingRepository>();
+            var browserLauncher = sp.GetRequiredService<IBrowserLauncher>();
+            var acknowledgementChannel = sp.GetRequiredService<ChannelWriter<MeetingAcknowledged>>();
+
+            return new AcknowledgeMeeting(
+                meetingRepository,
+                browserLauncher,
+                acknowledgementChannel);
+        });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the keyboard input service as a pure key-to-command mapper.
+    /// No dependencies on TUI state or application lifetime.
+    /// </summary>
+    public static IServiceCollection AddKeyboardInput(this IServiceCollection services)
+    {
+        services.AddSingleton<KeyboardInputService>();
+        services.AddSingleton<IKeyboardInputHandler>(sp => sp.GetRequiredService<KeyboardInputService>());
+        return services;
+    }
+
+    /// <summary>
+    /// Adds notification-related use cases.
+    /// </summary>
+    public static IServiceCollection AddNotificationUseCases(this IServiceCollection services)
+    {
+        services.AddSingleton<CalculateNotificationLevel>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the notification processing service.
+    /// </summary>
+    public static IServiceCollection AddNotificationProcessing(this IServiceCollection services)
+    {
+        // Register platform-specific notification strategies
+        services.AddNotificationStrategies();
+
+        services.AddSingleton<NotificationProcessingService>(sp =>
+        {
+            var calendarChannelReader = sp.GetRequiredKeyedService<ChannelReader<CalendarEventsUpdated>>("notifications");
+            var notificationChannelWriter = sp.GetRequiredService<ChannelWriter<NotificationStateChanged>>();
+            var strategies = sp.GetRequiredService<IEnumerable<INotificationStrategy>>();
+            var calculateLevel = sp.GetRequiredService<CalculateNotificationLevel>();
+            var config = sp.GetRequiredService<IAppConfiguration>();
+            var timeProvider = sp.GetRequiredService<ITimeProvider>();
+            var meetingRepository = sp.GetRequiredService<IMeetingRepository>();
+
+            return new NotificationProcessingService(
+                calendarChannelReader,
+                notificationChannelWriter,
+                strategies,
+                calculateLevel,
+                config,
+                timeProvider,
+                meetingRepository);
+        });
+
+        services.AddHostedService<NotificationProcessingHostedService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds platform-specific notification strategies.
+    /// </summary>
+    public static IServiceCollection AddNotificationStrategies(this IServiceCollection services)
+    {
+#if WINDOWS
+        // Windows-specific notification providers
+        services.AddSingleton<ISystemNotificationProvider, NotificationProvider>();
+        
+        // Register all strategies as a collection
+        services.AddSingleton<IEnumerable<INotificationStrategy>>(sp =>
+        {
+            var notificationProvider = sp.GetRequiredService<ISystemNotificationProvider>();
+            return new List<INotificationStrategy>
+            {
+                new SystemNotificationStrategy(notificationProvider),
+                new BeepNotificationStrategy()
+            };
+        });
+#else
+        // No platform-specific strategies available
+        services.AddSingleton<IEnumerable<INotificationStrategy>>(_ => []);
+#endif
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the notification display service for TUI updates.
+    /// </summary>
+    public static IServiceCollection AddNotificationDisplay(this IServiceCollection services)
+    {
+        services.AddHostedService<NotificationDisplayService>();
+        return services;
+    }
+}

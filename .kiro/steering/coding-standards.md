@@ -12,8 +12,10 @@ inclusion: auto
 
 ### Nullability
 - Nullable reference types are enabled in all projects
-- Use `?` for nullable types explicitly
+- Avoid nullable types where possible; use Result pattern to represent absence of values
+- Use `?` for nullable types only when truly optional (e.g., optional configuration parameters)
 - Use Assert methods for non-null validation
+- Prefer returning `Result<T, Error>` over returning `T?` when a value may not exist
 
 ### Immutability
 - Prefer immutable types (records, init-only properties)
@@ -35,8 +37,16 @@ inclusion: auto
 - Use singular names: `MeetingEvent`, `NotificationLevel`, `CalendarError`
 - Records for immutable data: `DomainEvent`, `Error`, `MeetingLink`
 - Classes for entities with behavior: `MeetingEvent`, `MeetingState`
+- Use case classes: verb-phrases (e.g., `FetchCalendarEvents`, `CalculateNotificationLevel`)
 
 ## Code Organization
+
+### No Region Directives
+- **NEVER use `#region` / `#endregion` directives in any code**
+- Region directives hide code complexity and make navigation harder
+- Use proper class organization and smaller classes instead
+- Group related tests using nested classes with descriptive names (e.g., `ConstructorValidation`, `ValidationTests`)
+- Nested test classes should inherit from the parent test fixture to share setup and helper methods
 
 ### Using Statements
 ```csharp
@@ -72,15 +82,21 @@ public class MeetingEvent
 
 ### Value Objects
 ```csharp
-// Use records for value objects
-public record MeetingLink(string Url, MeetingLinkType Type)
+// Use abstract records with sealed subclasses for type hierarchies
+public abstract record MeetingLink
 {
-    // Add validation in constructor if needed
-    public MeetingLink(string url, MeetingLinkType type) : this(url, type)
+    public string Url { get; init; }
+    public abstract bool IsVideoConferencing { get; }
+
+    protected MeetingLink(string url)
     {
         Url = NotNullOrEmpty(url);
-        Type = type;
     }
+}
+
+public sealed record GoogleMeetLink(string Url) : MeetingLink(Url)
+{
+    public override bool IsVideoConferencing => true;
 }
 ```
 
@@ -164,7 +180,7 @@ public TimeSpan GetTimeUntilStart(DateTime currentTime)
 - Tag with comment: `// Feature: meeting-reminder-tui, Property {number}: {property_text}`
 
 ### Unit Tests
-- Use xUnit with Moq for mocking
+- Use NUnit with AwesomeAssertions for readable assertions
 - Test specific examples and edge cases
 - Focus on core functional logic only
 - Create MINIMAL test solutions
@@ -193,3 +209,40 @@ public TimeSpan GetTimeUntilStart(DateTime currentTime)
 - Use `IReadOnlyList<T>` for public APIs
 - Use `List<T>` internally, expose as `AsReadOnly()`
 - Avoid LINQ in hot paths if performance critical
+
+## DateTime and Time Zone Handling
+
+### UTC Throughout the Stack
+- **All DateTime values in Domain, Application, and Infrastructure layers MUST use UTC**
+- Store and process all times as UTC internally
+- Convert to local time ONLY in the UI layer when displaying to users
+- Use `DateTime.UtcNow` or `ITimeProvider.UtcNow`, never `DateTime.Now` in non-UI code
+
+### DateTime Kind
+- Always specify `DateTimeKind.Utc` when creating DateTime values
+- When parsing external data (iCal, APIs), convert to UTC immediately
+- Use `.ToUniversalTime()` when receiving local times from external sources
+
+### ITimeProvider
+- Use `ITimeProvider.UtcNow` for testability
+- Never use `ITimeProvider.Now` in Domain, Application, or Infrastructure layers
+- `ITimeProvider.Now` is only for UI display purposes
+
+### UI Layer Conversion
+```csharp
+// In UI/Presentation layer only:
+var localTime = utcDateTime.ToLocalTime();
+var displayString = localTime.ToString("ddd MMM dd HH:mm");
+```
+
+### Domain Events and Messages
+```csharp
+// Always use UTC for timestamps in domain events
+public record CalendarEventsUpdated(
+    IReadOnlyList<MeetingEvent> AllEvents,
+    DateTime OccurredAt) // OccurredAt is always UTC
+```
+
+### Testing
+- Use `DateTimeKind.Utc` in test fixtures
+- FakeTimeProvider should return UTC times

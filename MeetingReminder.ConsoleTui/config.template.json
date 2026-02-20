@@ -1,0 +1,21 @@
+{
+  "pollingInterval": "00:05:00",
+  "enabledNotificationStrategies": ["Beep", "SystemNotification"],
+  "thresholds": {
+    "gentleMinutes": "00:15:00",
+    "moderateMinutes": "00:10:00",
+    "urgentMinutes": "00:05:00"
+  },
+  "calendars": [
+    {
+      "name": "My Calendar",
+      "type": "ICal",
+      "sourceUrl": "https://example.com/calendar.ics",
+      "notificationRules": {
+        "notificationWindowStart": "08:00:00",
+        "notificationWindowEnd": "18:00:00",
+        "urgencyMultiplier": 1
+      }
+    }
+  ]
+}

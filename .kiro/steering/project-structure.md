@@ -6,37 +6,55 @@ inclusion: auto
 
 ## Solution Organization
 
+The solution uses Solution Folders to organize projects:
+
 ```
 MeetingReminder.sln
 ├── MeetingReminder.Domain/           # Core domain (no dependencies)
 ├── MeetingReminder.Application/      # Use cases (depends on Domain)
 ├── MeetingReminder.Infrastructure/   # Cross-cutting infrastructure
 ├── MeetingReminder.GoogleCalendar/   # Google Calendar integration
-├── MeetingReminder.ICal/             # iCal integration
-├── MeetingReminder.Notifications/    # Notification strategies
-└── MeetingReminder.ConsoleTui/       # Spectre.Console TUI
+├── MeetingReminder.ConsoleTui/       # Spectre.Console TUI
+├── Tests/                            # Solution Folder
+│   ├── MeetingReminder.Domain.Tests/
+│   ├── MeetingReminder.Application.Tests/
+│   ├── MeetingReminder.Infrastructure.Tests/
+│   └── MeetingReminder.ManualTests/  # Manual testing console app
+└── Platforms/                        # Solution Folder
+    ├── MeetingReminder.Infrastructure.Windows/
+    └── MeetingReminder.Infrastructure.Linux/
 ```
+
+### Solution Folder Rules
+
+1. **Tests/** - All test projects (unit tests, integration tests, manual tests) go in this folder
+2. **Platforms/** - Platform-specific infrastructure projects go in this folder
+3. When adding a new test project, add it to the Tests/ solution folder
+4. When adding a new platform-specific project, add it to the Platforms/ solution folder
 
 ## Domain Project Structure
 
 ```
 MeetingReminder.Domain/
+├── Calendars/                        # Calendar domain slice
+│   ├── ICalendarSource.cs           # Interface
+│   ├── RawCalendarEvent.cs          # DTO
+│   ├── CalendarEventsUpdated.cs     # Domain event
+│   └── CalendarError.cs             # Error type
 ├── Meetings/                         # Meeting domain slice
 │   ├── MeetingEvent.cs              # Entity
 │   ├── MeetingState.cs              # Entity
-│   ├── MeetingLink.cs               # Value object
-│   ├── MeetingLinkType.cs           # Enum
-│   ├── CalendarEventsUpdated.cs     # Domain event
-│   └── MeetingAcknowledged.cs       # Domain event
+│   ├── MeetingLink.cs               # Abstract value object + subclasses
+│   ├── MeetingAcknowledged.cs       # Domain event
+│   └── MeetingLinkError.cs          # Error type
 ├── Notifications/                    # Notification domain slice
 │   ├── NotificationLevel.cs         # Enum
-│   └── NotificationStateChanged.cs  # Domain event
-├── Errors/                           # Domain errors (cross-cutting)
-│   ├── CalendarError.cs
-│   ├── NotificationError.cs
-│   └── ConfigurationError.cs
+│   ├── NotificationStateChanged.cs  # Domain event
+│   └── NotificationError.cs         # Error type
+├── Configuration/                    # Configuration domain slice
+│   ├── IConfigurationManager.cs     # Interface + related interfaces
+│   └── ConfigurationError.cs        # Error type
 ├── Assert.cs                         # Guard clauses
-├── DomainEvent.cs                    # Abstract base for events
 ├── Error.cs                          # Abstract base for errors
 └── Result.cs                         # Result pattern implementation
 ```
@@ -56,16 +74,16 @@ MeetingReminder.Application/
 ├── UseCases/                         # Organized by use case
 │   ├── FetchCalendarEvents/
 │   │   ├── FetchCalendarEventsQuery.cs
-│   │   └── FetchCalendarEventsHandler.cs
-│   ├── CalculateNotifications/
+│   │   └── FetchCalendarEvents.cs    # Use case class (verb-phrase name)
+│   ├── CalculateNotificationLevel/
 │   │   ├── CalculateNotificationLevelQuery.cs
-│   │   └── CalculateNotificationLevelHandler.cs
+│   │   └── CalculateNotificationLevel.cs
 │   ├── AcknowledgeMeeting/
 │   │   ├── AcknowledgeMeetingCommand.cs
-│   │   └── AcknowledgeMeetingHandler.cs
+│   │   └── AcknowledgeMeeting.cs
 │   └── ExtractMeetingLink/
 │       ├── ExtractMeetingLinkQuery.cs
-│       └── ExtractMeetingLinkHandler.cs
+│       └── ExtractMeetingLink.cs
 ├── Abstractions/                     # Interfaces for infrastructure
 │   ├── ICalendarSource.cs
 │   ├── INotificationStrategy.cs
@@ -80,7 +98,7 @@ MeetingReminder.Application/
 
 1. **Use Case Folders**: Each use case in its own folder
 2. **Command/Query**: Separate commands (write) from queries (read)
-3. **Handlers**: One handler per command/query
+3. **Use Case Classes**: Named as verb-phrases (e.g., `FetchCalendarEvents`, not `FetchCalendarEventsHandler`)
 4. **Abstractions**: Interfaces for infrastructure dependencies
 5. **No Domain Logic**: Application layer orchestrates, doesn't contain business rules
 
@@ -153,7 +171,7 @@ MeetingReminder.ConsoleTui/
 ### Application Layer
 - Commands: `AcknowledgeMeetingCommand.cs`
 - Queries: `FetchCalendarEventsQuery.cs`
-- Handlers: `AcknowledgeMeetingHandler.cs`
+- Use Cases: `FetchCalendarEvents.cs`, `CalculateNotificationLevel.cs` (verb-phrase names)
 - Interfaces: `ICalendarSource.cs`, `IEventBus.cs`
 
 ### Infrastructure Layer
@@ -167,10 +185,42 @@ ConsoleTui → Infrastructure → Application → Domain
          ↓
     GoogleCalendar → Application → Domain
          ↓
-    ICal → Application → Domain
+    Infrastructure.Windows → Infrastructure → Domain
          ↓
-    Notifications → Application → Domain
+    Infrastructure.Linux → Infrastructure → Domain
 ```
+
+## Platform-Specific Projects
+
+Platform-specific projects are organized in the Platforms/ solution folder:
+
+```
+Platforms/                            # Solution Folder
+├── MeetingReminder.Infrastructure.Windows/
+│   └── Notifications/
+│       ├── BeepNotificationStrategy.cs
+│       ├── NotificationProvider.cs
+│       ├── SoundPlayer.cs
+│       └── TerminalFlashStrategy.cs
+└── MeetingReminder.Infrastructure.Linux/
+    └── Notifications/
+        ├── NotificationProvider.cs
+        ├── SoundPlayer.cs
+        └── TerminalFlashStrategy.cs
+```
+
+### Platform Project Rules
+
+1. **Naming**: `MeetingReminder.Infrastructure.{Platform}`
+2. **Target Framework**: 
+   - Windows: `net10.0-windows10.0.17763.0` (for UWP APIs)
+   - Linux: `net10.0`
+3. **Class Naming**: Classes don't need platform prefix (namespace provides context)
+   - Use `NotificationProvider`, not `WindowsNotificationProvider`
+4. **Dependencies**: Reference `MeetingReminder.Infrastructure` for shared interfaces
+5. **Platform-specific packages**: Add platform-specific NuGet packages here
+   - Windows: `Microsoft.Toolkit.Uwp.Notifications`
+6. **Conditional References**: ConsoleTui conditionally references based on build platform
 
 ### Dependency Rules
 1. Domain has NO dependencies on other projects
@@ -212,20 +262,39 @@ ConsoleTui → Infrastructure → Application → Domain
 - Keep all projects in solution
 - Maintain project dependencies correctly
 
-## Testing Structure (Future)
+## Testing Structure
+
+Test projects are organized in the Tests/ solution folder:
 
 ```
-MeetingReminder.Tests/
-├── Unit/
-│   ├── Domain/
-│   ├── Application/
-│   └── Infrastructure/
-├── Properties/                       # Property-based tests
-│   ├── MeetingDisplayProperties.cs
-│   └── NotificationProperties.cs
-└── Integration/
-    └── EndToEndScenarios.cs
+Tests/                                # Solution Folder
+├── MeetingReminder.Domain.Tests/     # Domain unit tests
+│   ├── Meetings/
+│   │   ├── MeetingEventTests.cs
+│   │   └── MeetingStateTests.cs
+│   └── ResultTests.cs
+├── MeetingReminder.Application.Tests/ # Application unit tests
+│   └── UseCases/
+│       ├── CalculateNotificationLevelTests.cs
+│       └── ExtractMeetingLinkTests.cs
+├── MeetingReminder.Infrastructure.Tests/ # Infrastructure unit tests
+│   ├── Configuration/
+│   ├── ICal/
+│   ├── Notifications/
+│   └── Threading/
+└── MeetingReminder.ManualTests/      # Manual testing console app
+    └── Program.cs                    # Interactive notification tests
 ```
+
+### Test Project Naming
+- Unit test projects: `{ProjectName}.Tests`
+- Manual test projects: `MeetingReminder.ManualTests`
+- Integration test projects: `{ProjectName}.IntegrationTests`
+
+### Test Frameworks
+- Use NUnit for test framework
+- Use AwesomeAssertions for fluent assertions
+- Use NSubstitute for mocking
 
 ## Build Output
 

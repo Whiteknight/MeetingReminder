@@ -1,11 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\MeetingReminder.Application\MeetingReminder.Application.csproj" />
+    <InternalsVisibleTo Include="MeetingReminder.Infrastructure.Tests" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Text.Json" Version="10.0.3" />
+    <ProjectReference Include="..\MeetingReminder.Application\MeetingReminder.Application.csproj" />
+    <ProjectReference Include="..\MeetingReminder.Domain\MeetingReminder.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Ical.Net" Version="5.2.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

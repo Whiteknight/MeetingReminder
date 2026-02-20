@@ -117,8 +117,8 @@ The Meeting Reminder TUI is a console-based application designed to provide aggr
 3. WHEN a meeting start time is reached, THE Notification_Engine SHALL activate maximum intensity notifications
 4. THE Notification_Engine SHALL continue notifications at maximum intensity until the meeting is acknowledged
 5. THE Notification_Engine SHALL calculate notification intensity based on time remaining until meeting start
-6. WHEN a meeting is an all-day event, THE Notification_Engine SHALL not trigger urgent notifications
-7. THE Notification_Engine SHALL treat all-day events as low-priority for notification purposes
+6. WHEN a meeting is an all-day event, THE Notification_Engine SHALL not trigger any notifications
+7. THE Notification_Engine SHALL exclude all-day events from the notification system entirely
 
 ### Requirement 9: Pluggable Notification Strategies
 
@@ -134,6 +134,11 @@ The Meeting Reminder TUI is a console-based application designed to provide aggr
 6. THE Notification_Engine SHALL support playing sound files as a Notification_Strategy
 7. WHERE the system is running on Windows, THE Notification_Engine SHALL support Windows notification center as a Notification_Strategy
 8. WHERE the system is running on Linux, THE Notification_Engine SHALL support Linux desktop notifications as a Notification_Strategy
+9. THE Notification_Engine SHALL support two notification trigger modes: per-cycle and on-level-change
+10. WHEN a notification strategy is configured for per-cycle mode, THE Notification_Engine SHALL execute it on every notification processing cycle
+11. WHEN a notification strategy is configured for on-level-change mode, THE Notification_Engine SHALL execute it only when the notification level escalates
+12. THE Notification_Engine SHALL execute audio beeps and sound files in per-cycle mode for persistent reminders
+13. THE Notification_Engine SHALL execute system notifications and terminal flashes in on-level-change mode to avoid notification spam
 
 ### Requirement 10: Configurable Settings
 
@@ -187,3 +192,16 @@ The Meeting Reminder TUI is a console-based application designed to provide aggr
 3. THE TUI SHALL handle terminal resize events gracefully
 4. THE TUI SHALL provide keyboard navigation for meeting selection
 5. THE TUI SHALL update the display in real-time as calendar data and notification states change
+
+### Requirement 14: Video Call Detection and Notification Suppression
+
+**User Story:** As a user, I want the system to detect when I am on a video call, so that audible notifications are suppressed to avoid disrupting my current meeting.
+
+#### Acceptance Criteria
+
+1. THE Notification_Engine SHALL detect when the user is currently on a video call
+2. WHEN the user is on a video call, THE Notification_Engine SHALL suppress audio-based notification strategies (beeps, sound files)
+3. WHEN the user is on a video call, THE Notification_Engine SHALL continue to use non-audio notification strategies (terminal flash, system notifications)
+4. WHERE the system is running on Windows, THE Meeting_Reminder_System SHALL use Windows APIs to detect microphone or camera usage
+5. THE Meeting_Reminder_System SHALL support configuration to enable or disable video call detection
+6. WHEN video call detection is disabled, THE Notification_Engine SHALL execute all enabled notification strategies regardless of call status

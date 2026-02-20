@@ -16,6 +16,7 @@ This project uses the Result pattern instead of exceptions for error handling. A
 - Better for cross-thread communication
 - Avoids expensive exception throwing
 - Provides better type safety
+- Eliminates null reference exceptions by representing absence as errors
 
 ## Basic Usage
 
@@ -231,6 +232,7 @@ return new CalendarError(
 - Ignore error cases (always handle both paths)
 - Create generic error messages without context
 - Mix exceptions and Result pattern in the same layer
+- Return nullable types (`T?`) when a value may not exist; use `Result<T, Error>` instead
 
 ## Async Operations
 
@@ -274,6 +276,38 @@ public Result<Unit, NotificationError> AcknowledgeMeeting(string id)
     return Unit.Value; // Represents successful void operation
 }
 ```
+
+## Result Instead of Nullable Types
+
+Prefer returning `Result<T, Error>` over `T?` when a value may not exist. This makes the absence explicit and forces callers to handle it:
+
+```csharp
+// DON'T: Return nullable
+public MeetingLink? ExtractLink(string text)
+{
+    // ... extraction logic
+    return null; // Caller might forget to check for null
+}
+
+// DO: Return Result
+public Result<MeetingLink, Error> ExtractLink(string text)
+{
+    // ... extraction logic
+    return MeetingLinkError.NoLinkFound(); // Caller must handle the error case
+}
+
+// Consuming the Result
+var linkResult = ExtractLink(text);
+var link = linkResult.Match(
+    l => (MeetingLink?)l,  // Convert to nullable if needed for storage
+    _ => null);
+```
+
+This pattern:
+- Makes absence explicit in the type signature
+- Forces callers to handle both cases
+- Provides meaningful error messages
+- Eliminates null reference exceptions
 
 ## Testing Results
 

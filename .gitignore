@@ -3,7 +3,8 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-ParserObjects/ParserObjects.xml
+# Config files
+MeetingReminder.ConsoleTui/config.json
 
 # User-specific files
 *.rsuser
@@ -358,3 +359,8 @@ MigrationBackup/
 # Sonarqube stuff, OpenCover coverage, etc
 .sonarqube
 coverage.xml
+
+
+# User-specific configuration files (contain personal calendar URLs)
+**/config.json
+!**/config.template.json
