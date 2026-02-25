@@ -2,7 +2,6 @@ using MeetingReminder.Domain;
 using MeetingReminder.Domain.Browsers;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
-using System.Threading.Channels;
 
 namespace MeetingReminder.Application.UseCases;
 
@@ -15,23 +14,19 @@ public readonly record struct AcknowledgeMeetingCommand(string MeetingId, bool O
 
 /// <summary>
 /// Handles meeting acknowledgement requests.
-/// Marks meetings as acknowledged, optionally opens meeting links,
-/// and publishes acknowledgement events to the channel.
+/// Marks meetings as acknowledged, optionally opens meeting links.
 /// </summary>
 public class AcknowledgeMeeting
 {
     private readonly IMeetingRepository _meetingRepository;
     private readonly IBrowserLauncher _browserLauncher;
-    private readonly ChannelWriter<MeetingAcknowledged> _acknowledgementChannel;
 
     public AcknowledgeMeeting(
         IMeetingRepository meetingRepository,
-        IBrowserLauncher browserLauncher,
-        ChannelWriter<MeetingAcknowledged> acknowledgementChannel)
+        IBrowserLauncher browserLauncher)
     {
         _meetingRepository = meetingRepository;
         _browserLauncher = browserLauncher;
-        _acknowledgementChannel = acknowledgementChannel;
     }
 
     /// <summary>
@@ -45,7 +40,7 @@ public class AcknowledgeMeeting
             return new NotificationError("Meeting ID is required");
 
         // Get meeting state from repository
-        var meetingResult = await _meetingRepository.GetByIdAsync(command.MeetingId);
+        var meetingResult = _meetingRepository.GetById(command.MeetingId);
         if (meetingResult.IsError)
             return new NotificationError($"Meeting {command.MeetingId} not found");
 
@@ -71,17 +66,9 @@ public class AcknowledgeMeeting
         meetingState.Acknowledge();
 
         // Update the repository
-        var updateResult = await _meetingRepository.UpdateAsync(meetingState);
+        var updateResult = _meetingRepository.AddOrUpdate(meetingState);
         if (updateResult.IsError)
             return new NotificationError($"Failed to update meeting state for {command.MeetingId}");
-
-        // Write acknowledgement message to channel
-        var acknowledged = new MeetingAcknowledged(
-            command.MeetingId,
-            linkOpened,
-            DateTime.UtcNow);
-
-        await _acknowledgementChannel.WriteAsync(acknowledged);
 
         return Unit.Value;
     }

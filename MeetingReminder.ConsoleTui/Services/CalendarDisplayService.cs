@@ -1,11 +1,9 @@
-using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Meetings;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Threading.Channels;
 
 namespace MeetingReminder.ConsoleTui.Services;
 
@@ -16,62 +14,58 @@ namespace MeetingReminder.ConsoleTui.Services;
 /// </summary>
 public class CalendarDisplayService : BackgroundService
 {
-    private static readonly string[] SpinnerFrames = ["|", "/", "-", "\\"];
-
-    private readonly ChannelReader<CalendarEventsUpdated> _channelReader;
+    private static readonly string[] _spinnerFrames = ["|", "/", "-", "\\"];
+    private readonly IMeetingRepository _meetings;
     private readonly ILogger<CalendarDisplayService> _logger;
     private readonly TimeSpan _pollingInterval;
 
-    private IReadOnlyList<MeetingEvent> _currentEvents = [];
     private DateTime _lastPollTime = DateTime.UtcNow;
     private int _spinnerIndex;
 
     public CalendarDisplayService(
-        ChannelReader<CalendarEventsUpdated> channelReader,
         IAppConfiguration configuration,
+        IMeetingRepository meetings,
         ILogger<CalendarDisplayService> logger)
     {
-        _channelReader = channelReader;
         _pollingInterval = configuration.PollingInterval;
+        _meetings = meetings;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Calendar display service started");
+        var initial = GetUpcoming();
 
-        await AnsiConsole.Live(BuildDisplay())
+        await AnsiConsole.Live(BuildDisplay(initial))
             .AutoClear(false)
             .Overflow(VerticalOverflow.Ellipsis)
             .StartAsync(async ctx =>
             {
-                // Start a background task to read channel updates
-                var channelTask = Task.Run(async () =>
-                {
-                    await foreach (var update in _channelReader.ReadAllAsync(stoppingToken))
-                    {
-                        _currentEvents = update.AllEvents;
-                        _lastPollTime = update.OccurredAt;
-                        ctx.UpdateTarget(BuildDisplay());
-                    }
-                }, stoppingToken);
-
                 // Update countdown every 5 seconds
                 while (!stoppingToken.IsCancellationRequested)
                 {
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
-                    _spinnerIndex = (_spinnerIndex + 1) % SpinnerFrames.Length;
-                    ctx.UpdateTarget(BuildDisplay());
+                    _spinnerIndex = (_spinnerIndex + 1) % _spinnerFrames.Length;
+
+                    var upcoming = GetUpcoming();
+                    // TODO: Get the current meetings from the repository and feed them in.
+                    ctx.UpdateTarget(BuildDisplay(upcoming));
                 }
             });
     }
 
-    private IRenderable BuildDisplay()
+    private IReadOnlyList<MeetingState> GetUpcoming()
+    {
+        return _meetings.GetAll().Match(m => m, _ => []);
+    }
+
+    private IRenderable BuildDisplay(IReadOnlyList<MeetingState> upcoming)
     {
         var rows = new Rows(
             BuildHeader(),
             new Text(""),
-            BuildEventsTable(),
+            BuildEventsTable(upcoming),
             new Text(""),
             BuildFooter());
 
@@ -89,7 +83,7 @@ public class CalendarDisplayService : BackgroundService
         if (timeUntilNextPoll < TimeSpan.Zero)
             timeUntilNextPoll = TimeSpan.Zero;
 
-        var spinner = SpinnerFrames[_spinnerIndex];
+        var spinner = _spinnerFrames[_spinnerIndex];
         var countdown = FormatCountdown(timeUntilNextPoll);
 
         return new Markup($"[grey]Last updated: {_lastPollTime.ToLocalTime():HH:mm:ss}[/]  [cyan]{spinner}[/] [grey]Next poll in {countdown}[/]");
@@ -106,11 +100,11 @@ public class CalendarDisplayService : BackgroundService
         return $"{timeSpan.Seconds}s";
     }
 
-    private IRenderable BuildEventsTable()
+    private IRenderable BuildEventsTable(IReadOnlyList<MeetingState> upcoming)
     {
-        if (_currentEvents.Count == 0)
+        if (upcoming.Count == 0)
         {
-            return new Markup("[yellow]No upcoming meetings in the next 7 days.[/]");
+            return new Markup("[yellow]No upcoming meetings.[/]");
         }
 
         var table = new Table();
@@ -120,22 +114,22 @@ public class CalendarDisplayService : BackgroundService
         table.AddColumn("Title");
         table.AddColumn("Link");
 
-        var sortedEvents = _currentEvents.OrderBy(e => e.StartTime).ToList();
+        var sortedEvents = upcoming.OrderBy(e => e.Event.StartTime).ToList();
 
         foreach (var evt in sortedEvents)
         {
             // Convert UTC times to local for display
-            var startTime = evt.StartTime.ToLocalTime().ToString("ddd MMM dd HH:mm");
-            var endTime = evt.EndTime.ToLocalTime().ToString("HH:mm");
-            var title = Markup.Escape(evt.Title.Length > 40 ? evt.Title[..37] + "..." : evt.Title);
-            var linkIndicator = evt.Link != null ? $"[green]{GetLinkTypeName(evt.Link)}[/]" : "[grey]-[/]";
-
+            var startTime = evt.Event.StartTime.ToLocalTime().ToString("ddd MMM dd HH:mm");
+            var endTime = evt.Event.EndTime.ToLocalTime().ToString("HH:mm");
+            var title = Markup.Escape(evt.Event.Title.Length > 40 ? evt.Event.Title[..37] + "..." : evt.Event.Title);
+            //var linkIndicator = evt.Event.Link != null ? $"[green]{GetLinkTypeName(evt.Link)}[/]" : "[grey]-[/]";
+            var linkIndicator = "";
             table.AddRow(startTime, endTime, title, linkIndicator);
         }
 
         return new Rows(
             table,
-            new Markup($"[green]Found {_currentEvents.Count} upcoming event(s).[/]"));
+            new Markup($"[green]Found {upcoming.Count} upcoming event(s).[/]"));
     }
 
     private static IRenderable BuildFooter()

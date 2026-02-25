@@ -6,27 +6,25 @@ namespace MeetingReminder.Domain.Meetings;
 /// </summary>
 public interface IMeetingRepository
 {
+    // TODO: Probably want to always include calendar name with the id, like a compound key.
+    // separate calendars aren't guaranteed to have non-overlapping id spaces.
+
     /// <summary>
     /// Gets a meeting state by its ID.
     /// </summary>
     /// <param name="id">The meeting ID to look up</param>
     /// <returns>A Result containing the MeetingState or an error if not found</returns>
-    Task<Result<MeetingState, Error>> GetByIdAsync(string id);
+    Result<MeetingState, Error> GetById(string id);
 
     /// <summary>
     /// Gets all meeting states.
     /// </summary>
     /// <returns>A Result containing all meeting states or an error</returns>
-    Task<Result<IReadOnlyList<MeetingState>, Error>> GetAllAsync();
+    Result<IReadOnlyList<MeetingState>, Error> GetAll();
 
-    Task<Result<Unit, Error>> AddOrUpdateAsync(MeetingState state);
+    Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(string calendar);
 
-    /// <summary>
-    /// Updates a meeting state.
-    /// </summary>
-    /// <param name="state">The meeting state to update</param>
-    /// <returns>A Result indicating success or failure</returns>
-    Task<Result<Unit, Error>> UpdateAsync(MeetingState state);
+    Result<MeetingState, Error> AddOrUpdate(MeetingState state);
 
-    Task<Result<Unit, Error>> RemoveAsync(string id);
+    Result<string, Error> Remove(string id);
 }

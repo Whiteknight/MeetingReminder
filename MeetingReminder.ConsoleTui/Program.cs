@@ -107,11 +107,6 @@ public class Program
                 // Configuration management
                 services.AddConfiguration(configPath);
 
-                // Pub/sub channels for thread communication
-                services.AddCalendarChannel();
-                services.AddNotificationChannel();
-                services.AddAcknowledgementChannel();
-
                 // Repositories and external services
                 services.AddMeetingRepository();
                 services.AddBrowserLauncher();

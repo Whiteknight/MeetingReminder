@@ -1,8 +1,7 @@
-using System.Threading.Channels;
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
-using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
+using MeetingReminder.Domain.Input;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
 using Microsoft.Extensions.Hosting;
@@ -23,13 +22,11 @@ namespace MeetingReminder.ConsoleTui.Services;
 /// </summary>
 public class MeetingReminderTuiService : BackgroundService
 {
-    private const int MaxVisibleRows = 5;
+    private const int _maxRows = 5;
 
-    private static readonly string[] SpinnerFrames = ["|", "/", "-", "\\"];
-    private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
-
-    private readonly ChannelReader<CalendarEventsUpdated> _calendarChannelReader;
-    private readonly ChannelReader<NotificationStateChanged> _notificationChannelReader;
+    private static readonly string[] _spinnerFrames = ["|", "/", "-", "\\"];
+    private static readonly TimeSpan _tick = TimeSpan.FromMilliseconds(100);
+    private readonly IMeetingRepository _meetings;
     private readonly IKeyboardInputHandler _keyboardInputHandler;
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
     private readonly IHostApplicationLifetime _applicationLifetime;
@@ -37,18 +34,12 @@ public class MeetingReminderTuiService : BackgroundService
     private readonly ILogger<MeetingReminderTuiService> _logger;
     private readonly TimeSpan _pollingInterval;
 
-    // All state is only ever touched from the single event-loop task.
-    // TODO: Make ConcurrentDictionary
-    private Dictionary<string, Dictionary<string, MeetingEvent>> _currentEvents = [];
-
-    private IReadOnlyList<MeetingState> _activeNotifications = [];
     private DateTime _lastPollTime = DateTime.UtcNow;
     private int _spinnerIndex;
     private int _selectedMeetingIndex = -1; // -1 = auto-select next upcoming meeting
 
     public MeetingReminderTuiService(
-        ChannelReader<CalendarEventsUpdated> calendarChannelReader,
-        ChannelReader<NotificationStateChanged> notificationChannelReader,
+        IMeetingRepository meetings,
         IKeyboardInputHandler keyboardInputHandler,
         AcknowledgeMeeting acknowledgeMeeting,
         IHostApplicationLifetime applicationLifetime,
@@ -56,8 +47,7 @@ public class MeetingReminderTuiService : BackgroundService
         ITimeProvider timeProvider,
         ILogger<MeetingReminderTuiService> logger)
     {
-        _calendarChannelReader = calendarChannelReader;
-        _notificationChannelReader = notificationChannelReader;
+        _meetings = meetings;
         _keyboardInputHandler = keyboardInputHandler;
         _acknowledgeMeeting = acknowledgeMeeting;
         _applicationLifetime = applicationLifetime;
@@ -79,14 +69,12 @@ public class MeetingReminderTuiService : BackgroundService
                 {
                     while (!stoppingToken.IsCancellationRequested)
                     {
-                        DrainCalendarMessages();
-                        DrainNotificationMessages();
                         await ProcessKeyboardInput(stoppingToken);
 
-                        _spinnerIndex = (_spinnerIndex + 1) % SpinnerFrames.Length;
+                        _spinnerIndex = (_spinnerIndex + 1) % _spinnerFrames.Length;
 
                         ctx.UpdateTarget(BuildDisplay());
-                        await Task.Delay(TickInterval, stoppingToken);
+                        await Task.Delay(_tick, stoppingToken);
                     }
                 });
         }
@@ -100,86 +88,40 @@ public class MeetingReminderTuiService : BackgroundService
     // Event loop helpers
     // -------------------------------------------------------------------------
 
-    private void DrainCalendarMessages()
-    {
-        // Each message here represents messages from one calendar source.
-        var meetings = new List<MeetingEvent>();
-        while (_calendarChannelReader.TryRead(out var calUpdate))
-        {
-            meetings.AddRange(calUpdate.AllEvents);
-            _lastPollTime = calUpdate.OccurredAt;
-        }
-
-        var grouped = meetings
-            .GroupBy(m => m.CalendarSource)
-            .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Id));
-
-        foreach (var byCal in grouped)
-            _currentEvents[byCal.Key] = byCal.Value;
-
-        var totalCount = _currentEvents.Values.Sum(dict => dict.Count);
-        if (_selectedMeetingIndex >= totalCount)
-            _selectedMeetingIndex = totalCount - 1;
-    }
-
-    private void DrainNotificationMessages()
-    {
-        var states = new List<MeetingState>();
-        while (_notificationChannelReader.TryRead(out var notifUpdate))
-        {
-            states.AddRange(notifUpdate.ActiveNotifications);
-        }
-        _activeNotifications = states;
-    }
-
     private async Task ProcessKeyboardInput(CancellationToken stoppingToken)
     {
         if (!Console.KeyAvailable)
             return;
 
         var key = Console.ReadKey(intercept: true);
-        var command = _keyboardInputHandler.MapKey(key);
-        await HandleCommand(command, stoppingToken);
-    }
-
-    // -------------------------------------------------------------------------
-    // Command handling
-    // -------------------------------------------------------------------------
-
-    private async Task HandleCommand(TuiCommand command, CancellationToken cancellationToken)
-    {
-        switch (command)
+        switch (_keyboardInputHandler.MapKey(key))
         {
-            case TuiCommand.NavigateUp:
+            case InputCommand.NavigateUp:
                 NavigateUp();
                 break;
 
-            case TuiCommand.NavigateDown:
+            case InputCommand.NavigateDown:
                 NavigateDown();
                 break;
 
-            case TuiCommand.Acknowledge:
-                await HandleAcknowledgeAsync(openLink: false, cancellationToken);
+            case InputCommand.Acknowledge:
+                await HandleAcknowledgeAsync(openLink: false, stoppingToken);
                 break;
 
-            case TuiCommand.OpenAndAcknowledge:
-                await HandleAcknowledgeAsync(openLink: true, cancellationToken);
+            case InputCommand.OpenAndAcknowledge:
+                await HandleAcknowledgeAsync(openLink: true, stoppingToken);
                 break;
 
-            case TuiCommand.Quit:
+            case InputCommand.Quit:
                 _logger.LogInformation("Quit requested by user");
                 _applicationLifetime.StopApplication();
                 break;
         }
     }
 
-    /// <summary>
-    /// Handles command execution for testing purposes.
-    /// </summary>
-    internal async Task HandleCommandForTesting(TuiCommand command, CancellationToken cancellationToken)
-    {
-        await HandleCommand(command, cancellationToken);
-    }
+    // -------------------------------------------------------------------------
+    // Command handling
+    // -------------------------------------------------------------------------
 
     private async Task HandleAcknowledgeAsync(bool openLink, CancellationToken cancellationToken)
     {
@@ -190,23 +132,23 @@ public class MeetingReminderTuiService : BackgroundService
             return;
         }
 
-        var ackCommand = new AcknowledgeMeetingCommand(selectedMeeting.Id, openLink);
+        var ackCommand = new AcknowledgeMeetingCommand(selectedMeeting.Event.Id, openLink);
         var result = await _acknowledgeMeeting.Acknowledge(ackCommand);
 
         result.Switch(
             _ => _logger.LogInformation(
                 "Meeting acknowledged: {MeetingId}, OpenLink: {OpenLink}",
-                selectedMeeting.Id, openLink),
+                selectedMeeting.Event.Id, openLink),
             error => _logger.LogWarning(
                 "Failed to acknowledge meeting {MeetingId}: {Error}",
-                selectedMeeting.Id, error.Message));
+                selectedMeeting.Event.Id, error.Message));
     }
 
     // -------------------------------------------------------------------------
     // Navigation state
     // -------------------------------------------------------------------------
 
-    public MeetingEvent? GetSelectedMeeting()
+    public MeetingState? GetSelectedMeeting()
     {
         var sorted = GetSortedEvents();
         if (sorted.Count == 0)
@@ -236,7 +178,7 @@ public class MeetingReminderTuiService : BackgroundService
         if (sorted.Count == 0)
             return;
 
-        var maxIndex = Math.Min(sorted.Count, MaxVisibleRows) - 1;
+        var maxIndex = Math.Min(sorted.Count, _maxRows) - 1;
 
         if (_selectedMeetingIndex < 0)
             _selectedMeetingIndex = 0;
@@ -246,25 +188,16 @@ public class MeetingReminderTuiService : BackgroundService
 
     public int GetSelectedIndex() => _selectedMeetingIndex;
 
-    internal void SetEventsForTesting(IReadOnlyList<MeetingEvent> events)
-    {
-        _currentEvents = events
-            .GroupBy(m => m.CalendarSource)
-            .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Id));
-        if (_selectedMeetingIndex >= events.Count)
-            _selectedMeetingIndex = -1;
-    }
-
-    private MeetingEvent? GetNextUpcomingMeeting(IReadOnlyList<MeetingEvent> sorted)
+    private MeetingState? GetNextUpcomingMeeting(IReadOnlyList<MeetingState> sorted)
     {
         var now = _timeProvider.UtcNow;
-        return sorted.FirstOrDefault(e => e.StartTime > now) ?? sorted.FirstOrDefault();
+        return sorted.FirstOrDefault(e => e.Event.StartTime > now) ?? sorted.FirstOrDefault();
     }
 
-    private IReadOnlyList<MeetingEvent> GetSortedEvents()
-        => _currentEvents.SelectMany(kvp => kvp.Value.Select(x => x.Value))
-            .OrderBy(e => e.StartTime)
-            .ToList();
+    private IReadOnlyList<MeetingState> GetSortedEvents()
+        => _meetings.GetAll().Match(
+            events => events.OrderBy(e => e.Event.StartTime).ToList(),
+            _ => []);
 
     // -------------------------------------------------------------------------
     // Rendering
@@ -285,7 +218,7 @@ public class MeetingReminderTuiService : BackgroundService
         if (timeUntilNextPoll < TimeSpan.Zero)
             timeUntilNextPoll = TimeSpan.Zero;
 
-        var spinner = SpinnerFrames[_spinnerIndex];
+        var spinner = _spinnerFrames[_spinnerIndex];
         var countdown = FormatCountdown(timeUntilNextPoll);
 
         return new Markup(
@@ -295,8 +228,10 @@ public class MeetingReminderTuiService : BackgroundService
 
     private static string FormatCountdown(TimeSpan t)
     {
-        if (t.TotalSeconds < 1) return "now...";
-        if (t.TotalMinutes >= 1) return $"{(int)t.TotalMinutes}m {t.Seconds}s";
+        if (t.TotalSeconds < 1)
+            return "now...";
+        if (t.TotalMinutes >= 1)
+            return $"{(int)t.TotalMinutes}m {t.Seconds}s";
         return $"{t.Seconds}s";
     }
 
@@ -310,34 +245,34 @@ public class MeetingReminderTuiService : BackgroundService
     {
         var table = CreateEventsTableStructure();
 
-        if (_currentEvents.Count == 0)
+        var sorted = GetSortedEvents();
+        if (sorted.Count == 0)
         {
-            PadBlankRows(table, MaxVisibleRows);
+            PadBlankRows(table, _maxRows);
             return new Rows(
                 table,
                 new Markup("[yellow]No upcoming meetings in the next 7 days.[/]"));
         }
 
-        var sorted = GetSortedEvents();
-        var visible = sorted.Take(MaxVisibleRows).ToList();
-        var selectedMeeting = GetSelectedMeeting();
+        var visibleMeetings = sorted.Take(_maxRows).ToList();
+        var selectedIndex = _selectedMeetingIndex >= 0 && _selectedMeetingIndex < sorted.Count ? _selectedMeetingIndex : 0;
 
-        foreach (var evt in visible)
+        for (int i = 0; i < visibleMeetings.Count; i++)
         {
-            var isSelected = selectedMeeting?.Id == evt.Id;
-            var notifState = _activeNotifications.FirstOrDefault(n => n.Event.Id == evt.Id);
-            AddEventRow(table, evt, isSelected, notifState);
+            var meeting = visibleMeetings[i];
+            var isSelected = i == selectedIndex;
+            AddEventRow(table, meeting, isSelected);
         }
 
-        PadBlankRows(table, MaxVisibleRows - visible.Count);
+        PadBlankRows(table, _maxRows - visibleMeetings.Count);
 
         var selectionInfo = _selectedMeetingIndex >= 0
-            ? $"Selected: {_selectedMeetingIndex + 1}/{visible.Count}"
+            ? $"Selected: {_selectedMeetingIndex + 1}/{visibleMeetings.Count}"
             : $"Auto-selected next meeting ({sorted.Count} total)";
 
         return new Rows(
             table,
-            new Markup($"[green]Found {_currentEvents.Count} upcoming event(s).[/] [grey]{selectionInfo}[/]"));
+            new Markup($"[green]Found {sorted.Count} upcoming event(s).[/] [grey]{selectionInfo}[/]"));
     }
 
     private static Table CreateEventsTableStructure()
@@ -360,14 +295,14 @@ public class MeetingReminderTuiService : BackgroundService
             table.AddRow(" ", " ", " ", " ", " ", " ");
     }
 
-    private void AddEventRow(Table table, MeetingEvent evt, bool isSelected, MeetingState? notifState)
+    private static void AddEventRow(Table table, MeetingState meeting, bool isSelected)
     {
         var indicator = isSelected ? "[cyan bold]>[/]" : " ";
-        var start = evt.StartTime.ToLocalTime().ToString("ddd MMM dd HH:mm");
-        var end = evt.EndTime.ToLocalTime().ToString("HH:mm");
-        var title = Markup.Escape(TruncateString(evt.Title, 35));
-        var link = evt.Link != null ? $"[green]{GetLinkTypeName(evt.Link)}[/]" : "[grey]-[/]";
-        var status = GetStatusIndicator(notifState);
+        var start = meeting.Event.StartTime.ToLocalTime().ToString("ddd MMM dd HH:mm");
+        var end = meeting.Event.EndTime.ToLocalTime().ToString("HH:mm");
+        var title = Markup.Escape(TruncateString(meeting.Event.Title, 35));
+        var link = meeting.Event.Link != null ? $"[green]{GetLinkTypeName(meeting.Event.Link)}[/]" : "[grey]-[/]";
+        var status = GetStatusIndicator(meeting);
 
         if (isSelected)
         {
@@ -375,12 +310,12 @@ public class MeetingReminderTuiService : BackgroundService
             start = $"[cyan]{start}[/]";
             end = $"[cyan]{end}[/]";
         }
-        else if (notifState?.CurrentLevel >= NotificationLevel.Urgent)
+        else if (meeting?.CurrentLevel >= NotificationLevel.Urgent)
         {
             title = $"[red]{title}[/]";
             start = $"[red]{start}[/]";
         }
-        else if (notifState?.CurrentLevel >= NotificationLevel.Moderate)
+        else if (meeting?.CurrentLevel >= NotificationLevel.Moderate)
         {
             title = $"[yellow]{title}[/]";
             start = $"[yellow]{start}[/]";
@@ -391,8 +326,10 @@ public class MeetingReminderTuiService : BackgroundService
 
     private static string GetStatusIndicator(MeetingState? state)
     {
-        if (state == null) return "[grey]-[/]";
-        if (state.IsAcknowledged) return "[green]OK Acknowledged[/]";
+        if (state == null)
+            return "[grey]-[/]";
+        if (state.IsAcknowledged)
+            return "[green]OK Acknowledged[/]";
         return state.CurrentLevel switch
         {
             NotificationLevel.Critical => "[red]!! CRITICAL[/]",
@@ -403,27 +340,25 @@ public class MeetingReminderTuiService : BackgroundService
         };
     }
 
-    private static string GetLinkTypeName(MeetingLink link) => link switch
-    {
-        GoogleMeetLink => "Meet",
-        ZoomLink => "Zoom",
-        MicrosoftTeamsLink => "Teams",
-        OtherLink => "Link",
-        _ => "Link"
-    };
+    private static string GetLinkTypeName(MeetingLink link)
+        => link switch
+        {
+            GoogleMeetLink => "Meet",
+            ZoomLink => "Zoom",
+            MicrosoftTeamsLink => "Teams",
+            OtherLink => "Link",
+            _ => "Link"
+        };
 
     private static string TruncateString(string value, int maxLength)
-    {
-        if (string.IsNullOrEmpty(value)) return string.Empty;
-        return value.Length > maxLength ? value[..(maxLength - 3)] + "..." : value;
-    }
+        => string.IsNullOrEmpty(value)
+            ? string.Empty
+            : value.Length > maxLength ? value[..(maxLength - 3)] + "..." : value;
 
     private static IRenderable BuildKeyboardHints()
-    {
-        return new Markup(
+        => new Markup(
             "[grey]Enter[/] Acknowledge  " +
             "[grey]O[/] Open link  " +
             "[grey]Up/Down[/] Navigate  " +
             "[grey]Ctrl+C[/] Exit");
-    }
 }

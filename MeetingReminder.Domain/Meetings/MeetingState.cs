@@ -12,7 +12,7 @@ public class MeetingState
     /// <summary>
     /// The meeting event this state tracks
     /// </summary>
-    public MeetingEvent Event { get; init; }
+    public MeetingEvent Event { get; set; }
 
     /// <summary>
     /// Current notification level for this meeting

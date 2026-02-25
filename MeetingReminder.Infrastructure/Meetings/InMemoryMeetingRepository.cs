@@ -1,6 +1,6 @@
+using System.Collections.Concurrent;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Meetings;
-using System.Collections.Concurrent;
 
 namespace MeetingReminder.Infrastructure.Meetings;
 
@@ -13,34 +13,23 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     private readonly ConcurrentDictionary<string, MeetingState> _meetings = new();
 
     /// <inheritdoc />
-    public Task<Result<MeetingState, Error>> GetByIdAsync(string id)
+    public Result<MeetingState, Error> GetById(string id)
     {
         if (string.IsNullOrEmpty(id))
-            return Task.FromResult<Result<MeetingState, Error>>(new MeetingRepositoryError("Meeting ID cannot be null or empty"));
+            return new MeetingRepositoryError("Meeting ID cannot be null or empty");
 
         if (_meetings.TryGetValue(id, out var state))
-            return Task.FromResult<Result<MeetingState, Error>>(state);
+            return state;
 
-        return Task.FromResult<Result<MeetingState, Error>>(
-            new MeetingRepositoryError($"Meeting with ID '{id}' not found"));
+        return new MeetingRepositoryError($"Meeting with ID '{id}' not found");
     }
 
     /// <inheritdoc />
-    public Task<Result<IReadOnlyList<MeetingState>, Error>> GetAllAsync()
-    {
-        var states = _meetings.Values.ToList().AsReadOnly();
-        return Task.FromResult<Result<IReadOnlyList<MeetingState>, Error>>(states);
-    }
+    public Result<IReadOnlyList<MeetingState>, Error> GetAll()
+        => _meetings.Values.ToList().AsReadOnly();
 
-    /// <inheritdoc />
-    public Task<Result<Unit, Error>> UpdateAsync(MeetingState state)
-    {
-        if (state is null)
-            return Task.FromResult<Result<Unit, Error>>(new MeetingRepositoryError("Meeting state cannot be null"));
-
-        _meetings[state.Event.Id] = state;
-        return Task.FromResult<Result<Unit, Error>>(Unit.Value);
-    }
+    public Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(string calendar)
+        => _meetings.Values.Where(ms => ms.Event.CalendarSource == calendar).ToList().AsReadOnly();
 
     /// <summary>
     /// Adds or updates a meeting state in the repository.
@@ -48,21 +37,27 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     /// </summary>
     /// <param name="state">The meeting state to add or update</param>
     /// <returns>A Result indicating success or failure</returns>
-    public Task<Result<Unit, Error>> AddOrUpdateAsync(MeetingState state)
-        => UpdateAsync(state);
+    public Result<MeetingState, Error> AddOrUpdate(MeetingState state)
+    {
+        if (state is null)
+            return new MeetingRepositoryError("Meeting state cannot be null");
+
+        _meetings[state.Event.Id] = state;
+        return state;
+    }
 
     /// <summary>
     /// Removes a meeting state from the repository.
     /// </summary>
     /// <param name="id">The ID of the meeting to remove</param>
     /// <returns>A Result indicating success or failure</returns>
-    public Task<Result<Unit, Error>> RemoveAsync(string id)
+    public Result<string, Error> Remove(string id)
     {
         if (string.IsNullOrEmpty(id))
-            return Task.FromResult<Result<Unit, Error>>(new MeetingRepositoryError("Meeting ID cannot be null or empty"));
+            return new MeetingRepositoryError("Meeting ID cannot be null or empty");
 
         _meetings.TryRemove(id, out _);
-        return Task.FromResult<Result<Unit, Error>>(Unit.Value);
+        return id;
     }
 
     /// <summary>

@@ -37,7 +37,7 @@ public class FetchCalendarEvents
     /// Result containing aggregated and enriched meeting events from all successful sources,
     /// or a CalendarError if all sources failed.
     /// </returns>
-    public async Task<Result<IReadOnlyList<MeetingEvent>, CalendarError>> Fetch(
+    public async Task<Result<IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>>, CalendarError>> Fetch(
         FetchCalendarEventsQuery query,
         CancellationToken cancellationToken)
     {
@@ -54,7 +54,6 @@ public class FetchCalendarEvents
         return AggregateAndEnrichResults(results);
     }
 
-
     private static async Task<SourceFetchResult> FetchFromSource(
         ICalendarSource source,
         FetchCalendarEventsQuery query,
@@ -70,7 +69,7 @@ public class FetchCalendarEvents
             error => new SourceFetchResult(source.SourceName, null, error));
     }
 
-    private Result<IReadOnlyList<MeetingEvent>, CalendarError> AggregateAndEnrichResults(
+    private Result<IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>>, CalendarError> AggregateAndEnrichResults(
         SourceFetchResult[] results)
     {
         var allRawEvents = new List<RawCalendarEvent>();
@@ -91,7 +90,7 @@ public class FetchCalendarEvents
                 .Select(EnrichRawEvent)
                 .ToList()
                 .AsReadOnly();
-            return enrichedEvents;
+            return enrichedEvents.GroupBy(e => e.CalendarSource).ToDictionary(e => e.Key, e => (IReadOnlyList<MeetingEvent>)e.ToList());
         }
 
         // All sources failed - return aggregate error

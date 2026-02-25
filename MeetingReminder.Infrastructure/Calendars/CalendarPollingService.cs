@@ -1,10 +1,8 @@
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
-using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Messaging;
-using System.Threading.Channels;
 using static MeetingReminder.Domain.Assert;
 
 namespace MeetingReminder.Infrastructure.Calendars;
@@ -17,32 +15,31 @@ namespace MeetingReminder.Infrastructure.Calendars;
 public class CalendarPollingService : ICalendarPollingService
 {
     private readonly FetchCalendarEvents _fetchCalendarEvents;
-    private readonly ChannelWriter<CalendarEventsUpdated> _calendarChannel;
     private readonly TimeSpan _pollingInterval;
     private readonly SemaphoreSlim _pollLock = new(1, 1);
+    private readonly IMeetingRepository _meetings;
     private readonly ITimeProvider _timeProvider;
 
     private Timer? _timer;
     private CancellationTokenSource? _cts;
-    private Dictionary<string, MeetingEvent> _lastKnownEvents = new();
     private bool _disposed;
 
     /// <summary>
     /// Creates a new instance of the CalendarPollingService.
     /// </summary>
     /// <param name="fetchCalendarEvents">Use case for fetching calendar events</param>
-    /// <param name="calendarChannel">Channel to write calendar updates to</param>
+    /// <param name="meetings"></param>
     /// <param name="configuration">Application configuration containing polling interval</param>
     /// <param name="timeProvider">Optional time provider for testing (defaults to system time)</param>
     public CalendarPollingService(
         FetchCalendarEvents fetchCalendarEvents,
-        ChannelWriter<CalendarEventsUpdated> calendarChannel,
+        IMeetingRepository meetings,
         IAppConfiguration configuration,
         ITimeProvider? timeProvider = null)
     {
         _fetchCalendarEvents = NotNull(fetchCalendarEvents);
-        _calendarChannel = NotNull(calendarChannel);
         _pollingInterval = configuration?.PollingInterval ?? TimeSpan.FromMinutes(5);
+        _meetings = meetings;
         _timeProvider = timeProvider ?? new SystemTimeProvider();
 
         if (_pollingInterval < TimeSpan.FromMinutes(1))
@@ -64,12 +61,12 @@ public class CalendarPollingService : ICalendarPollingService
 
         // Start timer with immediate first poll, then at configured interval
         _timer = new Timer(
-            callback: _ => 
+            callback: _ =>
             {
                 // Guard against accessing disposed CTS during shutdown
                 if (_disposed || _cts is null)
                     return;
-                
+
                 try
                 {
                     _ = PollInternalAsync(_cts.Token);
@@ -128,7 +125,7 @@ public class CalendarPollingService : ICalendarPollingService
 
             if (result.IsSuccess)
             {
-                var events = result.Match(e => e, _ => []);
+                var events = result.Match(e => e, _ => new Dictionary<string, IReadOnlyList<MeetingEvent>>());
                 await ProcessFetchedEventsAsync(events, now, cancellationToken);
             }
             // On failure, we don't update the channel - the UI will continue showing
@@ -141,33 +138,36 @@ public class CalendarPollingService : ICalendarPollingService
     }
 
     private async Task ProcessFetchedEventsAsync(
-        IReadOnlyList<MeetingEvent> events,
+        IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>> events,
         DateTime occurredAt,
         CancellationToken cancellationToken)
     {
-        var currentEvents = events.ToDictionary(e => e.Id, e => e);
+        foreach (var (calendarSource, incomingMeetings) in events)
+        {
+            var existingResult = _meetings.GetAllByCalendar(calendarSource);
+            // TODO: Understand and handle this error case.
+            if (!existingResult.IsSuccess)
+                continue;
+            var existing = existingResult.GetValueOrDefault([]).ToDictionary(e => e.Event.Id);
 
-        // Detect added events (in current but not in last known)
-        var addedEvents = currentEvents.Values
-            .Where(e => !_lastKnownEvents.ContainsKey(e.Id))
-            .ToList();
+            foreach (var incoming in incomingMeetings)
+            {
+                if (!existing.ContainsKey(incoming.Id))
+                {
+                    _meetings.AddOrUpdate(new MeetingState(incoming));
+                    continue;
+                }
 
-        // Detect removed event IDs (in last known but not in current)
-        var removedEventIds = _lastKnownEvents.Keys
-            .Where(id => !currentEvents.ContainsKey(id))
-            .ToList();
+                // TODO: This may cause a conflict if we have two updaters running at the same time
+                // is that possible?
+                var state = existing[incoming.Id];
+                state.Event = incoming;
+                existing.Remove(incoming.Id);
+            }
 
-        // Create and publish the update message
-        var update = new CalendarEventsUpdated(
-            AllEvents: events,
-            AddedEvents: addedEvents.AsReadOnly(),
-            RemovedEventIds: removedEventIds.AsReadOnly(),
-            OccurredAt: occurredAt);
-
-        await _calendarChannel.WriteAsync(update, cancellationToken);
-
-        // Update last known state
-        _lastKnownEvents = currentEvents;
+            foreach (var remaining in existing.Values)
+                _meetings.Remove(remaining.Event.Id);
+        }
     }
 
     private void ThrowIfDisposed()
