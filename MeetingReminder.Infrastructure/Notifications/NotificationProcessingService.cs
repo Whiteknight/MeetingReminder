@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Threading.Channels;
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Calendars;
@@ -6,8 +8,6 @@ using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
 using MeetingReminder.Infrastructure.Meetings;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
-using System.Threading.Channels;
 using static MeetingReminder.Domain.Assert;
 
 namespace MeetingReminder.Infrastructure.Notifications;
@@ -19,7 +19,7 @@ namespace MeetingReminder.Infrastructure.Notifications;
 /// </summary>
 public class NotificationProcessingService : IDisposable
 {
-    private static readonly TimeSpan NotificationProcessingInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan _notificationProcessingInterval = TimeSpan.FromSeconds(10);
 
     private readonly ChannelReader<CalendarEventsUpdated> _calendarChannel;
     private readonly ChannelWriter<NotificationStateChanged> _notificationChannel;
@@ -27,7 +27,7 @@ public class NotificationProcessingService : IDisposable
     private readonly CalculateNotificationLevel _calculateNotificationLevel;
     private readonly IAppConfiguration _config;
     private readonly ITimeProvider _timeProvider;
-    private readonly InMemoryMeetingRepository? _meetingRepository;
+    private readonly IMeetingRepository _meetingRepository;
     private readonly ILogger<NotificationProcessingService>? _logger;
 
     private readonly ConcurrentDictionary<string, MeetingState> _meetingStates = new();
@@ -62,7 +62,7 @@ public class NotificationProcessingService : IDisposable
         _calculateNotificationLevel = NotNull(calculateNotificationLevel);
         _config = NotNull(config);
         _timeProvider = timeProvider ?? new SystemTimeProvider();
-        _meetingRepository = meetingRepository as InMemoryMeetingRepository;
+        _meetingRepository = meetingRepository ?? new InMemoryMeetingRepository();
         _logger = logger;
 
         // Filter to only enabled and supported strategies (Requirements 9.2, 9.3)
@@ -98,7 +98,7 @@ public class NotificationProcessingService : IDisposable
         ThrowIfDisposed();
 
         if (_notificationTimer is not null)
-            return Task.CompletedTask; // Already running
+            return Task.CompletedTask;
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -111,8 +111,8 @@ public class NotificationProcessingService : IDisposable
         _notificationTimer = new Timer(
             callback: _ => _ = ProcessNotificationsAsync(),
             state: null,
-            dueTime: NotificationProcessingInterval,
-            period: NotificationProcessingInterval);
+            dueTime: _notificationProcessingInterval,
+            period: _notificationProcessingInterval);
 
         _logger?.LogInformation("Notification processing service started");
 
@@ -184,9 +184,8 @@ public class NotificationProcessingService : IDisposable
         {
             if (_meetingStates.TryRemove(removedId, out var removedState))
             {
-                _meetingRepository?.RemoveAsync(removedId);
-                _logger?.LogDebug("Removed meeting state for {MeetingId}: {Title}",
-                    removedId, removedState.Event.Title);
+                _meetingRepository.RemoveAsync(removedId);
+                _logger?.LogDebug("Removed meeting state for {MeetingId}: {Title}", removedId, removedState.Event.Title);
             }
         }
 
@@ -211,7 +210,7 @@ public class NotificationProcessingService : IDisposable
                 });
 
             // Sync to repository for acknowledgement use case
-            _meetingRepository?.AddOrUpdateAsync(newState);
+            _meetingRepository.AddOrUpdateAsync(newState);
         }
 
         _logger?.LogDebug("Calendar updated: {Total} events, {Added} added, {Removed} removed",
@@ -226,23 +225,18 @@ public class NotificationProcessingService : IDisposable
         var currentTime = _timeProvider.UtcNow;
         var activeNotifications = new List<MeetingState>();
 
-        foreach (var kvp in _meetingStates)
+        foreach (var (_, state) in _meetingStates)
         {
-            var state = kvp.Value;
-
             // Check if meeting was acknowledged via the repository (from AcknowledgeMeeting use case)
-            if (_meetingRepository is not null)
+            var repoResult = await _meetingRepository.GetByIdAsync(state.Event.Id);
+            if (repoResult.IsSuccess)
             {
-                var repoResult = await _meetingRepository.GetByIdAsync(state.Event.Id);
-                if (repoResult.IsSuccess)
+                var repoState = repoResult.Match(s => s, _ => null!);
+                if (repoState.IsAcknowledged && !state.IsAcknowledged)
                 {
-                    var repoState = repoResult.Match(s => s, _ => null!);
-                    if (repoState.IsAcknowledged && !state.IsAcknowledged)
-                    {
-                        // Sync acknowledgement from repository to local state
-                        state.Acknowledge();
-                        _logger?.LogDebug("Synced acknowledgement from repository for {MeetingId}", state.Event.Id);
-                    }
+                    // Sync acknowledgement from repository to local state
+                    state.Acknowledge();
+                    _logger?.LogDebug("Synced acknowledgement from repository for {MeetingId}", state.Event.Id);
                 }
             }
 
@@ -321,8 +315,7 @@ public class NotificationProcessingService : IDisposable
                 if (!cycleResult.IsSuccess)
                 {
                     var error = cycleResult.Match(_ => (NotificationError?)null, e => e);
-                    _logger?.LogWarning("Notification strategy {Strategy} cycle execution failed: {Error}",
-                        strategy.StrategyName, error?.Message);
+                    _logger?.LogWarning("Notification strategy {Strategy} cycle execution failed: {Error}", strategy.StrategyName, error?.Message);
                 }
 
                 // Only execute level-change notifications when level actually changed (e.g., toasts)
@@ -340,8 +333,7 @@ public class NotificationProcessingService : IDisposable
             catch (Exception ex)
             {
                 // Catch any unexpected exceptions to ensure other strategies still execute (Requirement 12.3)
-                _logger?.LogError(ex, "Notification strategy {Strategy} threw an exception",
-                    strategy.StrategyName);
+                _logger?.LogError(ex, "Notification strategy {Strategy} threw an exception", strategy.StrategyName);
             }
         }
     }

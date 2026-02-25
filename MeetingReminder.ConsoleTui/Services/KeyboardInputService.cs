@@ -45,6 +45,7 @@ public class KeyboardInputService : IKeyboardInputHandler
         return new TuiCommand.None();
     }
 
+    // TODO: Make extension method
     private static bool HasCtrl(ConsoleKeyInfo keyInfo)
         => keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control);
 }

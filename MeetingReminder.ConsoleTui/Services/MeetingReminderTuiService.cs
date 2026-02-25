@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Calendars;
@@ -8,7 +9,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Threading.Channels;
 
 namespace MeetingReminder.ConsoleTui.Services;
 
@@ -23,6 +23,8 @@ namespace MeetingReminder.ConsoleTui.Services;
 /// </summary>
 public class MeetingReminderTuiService : BackgroundService
 {
+    private const int MaxVisibleRows = 5;
+
     private static readonly string[] SpinnerFrames = ["|", "/", "-", "\\"];
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
 
@@ -36,7 +38,9 @@ public class MeetingReminderTuiService : BackgroundService
     private readonly TimeSpan _pollingInterval;
 
     // All state is only ever touched from the single event-loop task.
-    private IReadOnlyList<MeetingEvent> _currentEvents = [];
+    // TODO: Make ConcurrentDictionary
+    private Dictionary<string, Dictionary<string, MeetingEvent>> _currentEvents = [];
+
     private IReadOnlyList<MeetingState> _activeNotifications = [];
     private DateTime _lastPollTime = DateTime.UtcNow;
     private int _spinnerIndex;
@@ -64,7 +68,6 @@ public class MeetingReminderTuiService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Meeting Reminder TUI service started");
         Console.CursorVisible = false;
 
         try
@@ -99,22 +102,34 @@ public class MeetingReminderTuiService : BackgroundService
 
     private void DrainCalendarMessages()
     {
+        // Each message here represents messages from one calendar source.
+        var meetings = new List<MeetingEvent>();
         while (_calendarChannelReader.TryRead(out var calUpdate))
         {
-            _currentEvents = calUpdate.AllEvents;
+            meetings.AddRange(calUpdate.AllEvents);
             _lastPollTime = calUpdate.OccurredAt;
-
-            if (_selectedMeetingIndex >= _currentEvents.Count)
-                _selectedMeetingIndex = -1;
         }
+
+        var grouped = meetings
+            .GroupBy(m => m.CalendarSource)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Id));
+
+        foreach (var byCal in grouped)
+            _currentEvents[byCal.Key] = byCal.Value;
+
+        var totalCount = _currentEvents.Values.Sum(dict => dict.Count);
+        if (_selectedMeetingIndex >= totalCount)
+            _selectedMeetingIndex = totalCount - 1;
     }
 
     private void DrainNotificationMessages()
     {
+        var states = new List<MeetingState>();
         while (_notificationChannelReader.TryRead(out var notifUpdate))
         {
-            _activeNotifications = notifUpdate.ActiveNotifications;
+            states.AddRange(notifUpdate.ActiveNotifications);
         }
+        _activeNotifications = states;
     }
 
     private async Task ProcessKeyboardInput(CancellationToken stoppingToken)
@@ -138,15 +153,19 @@ public class MeetingReminderTuiService : BackgroundService
             case TuiCommand.NavigateUp:
                 NavigateUp();
                 break;
+
             case TuiCommand.NavigateDown:
                 NavigateDown();
                 break;
+
             case TuiCommand.Acknowledge:
                 await HandleAcknowledgeAsync(openLink: false, cancellationToken);
                 break;
+
             case TuiCommand.OpenAndAcknowledge:
                 await HandleAcknowledgeAsync(openLink: true, cancellationToken);
                 break;
+
             case TuiCommand.Quit:
                 _logger.LogInformation("Quit requested by user");
                 _applicationLifetime.StopApplication();
@@ -229,7 +248,9 @@ public class MeetingReminderTuiService : BackgroundService
 
     internal void SetEventsForTesting(IReadOnlyList<MeetingEvent> events)
     {
-        _currentEvents = events;
+        _currentEvents = events
+            .GroupBy(m => m.CalendarSource)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(x => x.Id));
         if (_selectedMeetingIndex >= events.Count)
             _selectedMeetingIndex = -1;
     }
@@ -241,7 +262,9 @@ public class MeetingReminderTuiService : BackgroundService
     }
 
     private IReadOnlyList<MeetingEvent> GetSortedEvents()
-        => _currentEvents.OrderBy(e => e.StartTime).ToList();
+        => _currentEvents.SelectMany(kvp => kvp.Value.Select(x => x.Value))
+            .OrderBy(e => e.StartTime)
+            .ToList();
 
     // -------------------------------------------------------------------------
     // Rendering
@@ -276,8 +299,6 @@ public class MeetingReminderTuiService : BackgroundService
         if (t.TotalMinutes >= 1) return $"{(int)t.TotalMinutes}m {t.Seconds}s";
         return $"{t.Seconds}s";
     }
-
-    private const int MaxVisibleRows = 5;
 
     private IRenderable BuildMeetingsPanel() =>
         new Panel(BuildEventsTable())
@@ -375,10 +396,10 @@ public class MeetingReminderTuiService : BackgroundService
         return state.CurrentLevel switch
         {
             NotificationLevel.Critical => "[red]!! CRITICAL[/]",
-            NotificationLevel.Urgent   => "[orange1]! Urgent[/]",
+            NotificationLevel.Urgent => "[orange1]! Urgent[/]",
             NotificationLevel.Moderate => "[yellow]* Moderate[/]",
-            NotificationLevel.Gentle   => "[blue]~ Gentle[/]",
-            _                          => "[grey]-[/]"
+            NotificationLevel.Gentle => "[blue]~ Gentle[/]",
+            _ => "[grey]-[/]"
         };
     }
 

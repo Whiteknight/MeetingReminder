@@ -1,10 +1,8 @@
-﻿using MeetingReminder.Domain.Configuration;
+﻿using System.Text;
 using MeetingReminder.Infrastructure.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-using System.Text;
 
 namespace MeetingReminder.ConsoleTui;
 
@@ -15,10 +13,6 @@ public class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
-
-        AnsiConsole.MarkupLine("[blue]Meeting Reminder TUI[/]");
-        AnsiConsole.MarkupLine("[grey]Starting up...[/]");
-        AnsiConsole.WriteLine();
 
         // Validate configuration before starting the host
         var configValidationResult = ValidateConfiguration(configPath);
@@ -42,11 +36,6 @@ public class Program
         try
         {
             var host = CreateHostBuilder(args, configPath).Build();
-            
-            AnsiConsole.MarkupLine("[green]Application started successfully.[/]");
-            AnsiConsole.MarkupLine("[grey]Press Ctrl+C to exit.[/]");
-            AnsiConsole.WriteLine();
-
             await host.RunAsync(cts.Token);
         }
         catch (OperationCanceledException)
@@ -80,15 +69,11 @@ public class Program
         var result = configManager.LoadConfiguration();
 
         return result.Match(
-            config =>
-            {
-                LogConfigurationSummary(config, configPath);
-                return true;
-            },
+            _ => true,
             error =>
             {
                 AnsiConsole.MarkupLine($"[red]Configuration error:[/] {Markup.Escape(error.Message)}");
-                
+
                 if (error.ConfigKey != null)
                 {
                     AnsiConsole.MarkupLine($"[grey]Config path: {Markup.Escape(error.ConfigKey)}[/]");
@@ -105,22 +90,6 @@ public class Program
             });
     }
 
-    /// <summary>
-    /// Logs a summary of the loaded configuration.
-    /// </summary>
-    private static void LogConfigurationSummary(IAppConfiguration config, string configPath)
-    {
-        AnsiConsole.MarkupLine($"[grey]Configuration loaded from: {Markup.Escape(configPath)}[/]");
-        AnsiConsole.MarkupLine($"[grey]  Polling interval: {config.PollingInterval}[/]");
-        AnsiConsole.MarkupLine($"[grey]  Calendars configured: {config.Calendars.Count}[/]");
-        AnsiConsole.MarkupLine($"[grey]  Notification strategies: {string.Join(", ", config.EnabledNotificationStrategies)}[/]");
-
-        if (config.Calendars.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[yellow]Warning: No calendars configured. Add calendars to config.json to see meetings.[/]");
-        }
-    }
-
     private static IHostBuilder CreateHostBuilder(string[] args, string configPath)
     {
         return Host.CreateDefaultBuilder(args)
@@ -134,31 +103,31 @@ public class Program
             {
                 // Core infrastructure (time provider, HTTP client)
                 services.AddCoreInfrastructure();
-                
+
                 // Configuration management
                 services.AddConfiguration(configPath);
-                
+
                 // Pub/sub channels for thread communication
                 services.AddCalendarChannel();
                 services.AddNotificationChannel();
                 services.AddAcknowledgementChannel();
-                
+
                 // Repositories and external services
                 services.AddMeetingRepository();
                 services.AddBrowserLauncher();
                 services.AddCalendarSources();
-                
+
                 // Use cases
                 services.AddCalendarUseCases();
                 services.AddNotificationUseCases();
                 services.AddAcknowledgementUseCases();
-                
+
                 // Background services (run on separate threads via IHostedService)
                 // CalendarPollingService: Polls calendars at configured interval
                 // NotificationProcessingService: Processes notifications every 10 seconds
                 services.AddCalendarPolling();
                 services.AddNotificationProcessing();
-                
+
                 // TUI services (BackgroundService pattern - runs on thread pool)
                 // MeetingReminderTuiService: Renders the three-panel TUI
                 // KeyboardInputService: Handles keyboard input

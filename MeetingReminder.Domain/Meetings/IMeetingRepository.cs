@@ -19,10 +19,14 @@ public interface IMeetingRepository
     /// <returns>A Result containing all meeting states or an error</returns>
     Task<Result<IReadOnlyList<MeetingState>, Error>> GetAllAsync();
 
+    Task<Result<Unit, Error>> AddOrUpdateAsync(MeetingState state);
+
     /// <summary>
     /// Updates a meeting state.
     /// </summary>
     /// <param name="state">The meeting state to update</param>
     /// <returns>A Result indicating success or failure</returns>
     Task<Result<Unit, Error>> UpdateAsync(MeetingState state);
+
+    Task<Result<Unit, Error>> RemoveAsync(string id);
 }
