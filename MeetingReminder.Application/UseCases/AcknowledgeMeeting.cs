@@ -20,13 +20,16 @@ public class AcknowledgeMeeting
 {
     private readonly IMeetingRepository _meetingRepository;
     private readonly IBrowserLauncher _browserLauncher;
+    private readonly ITimeProvider _time;
 
     public AcknowledgeMeeting(
         IMeetingRepository meetingRepository,
-        IBrowserLauncher browserLauncher)
+        IBrowserLauncher browserLauncher,
+        ITimeProvider time)
     {
         _meetingRepository = meetingRepository;
         _browserLauncher = browserLauncher;
+        _time = time;
     }
 
     /// <summary>
@@ -44,10 +47,10 @@ public class AcknowledgeMeeting
         if (meetingResult.IsError)
             return new NotificationError($"Meeting {command.MeetingId} not found");
 
-        var meetingState = meetingResult.Match(s => s, _ => null!);
+        // TODO: Bind this to avoid the IsError/GetValueOrDefault pattern
+        var meetingState = meetingResult.GetValueOrDefault(default);
 
         // Open link if requested and link exists
-        var linkOpened = false;
         if (command.OpenLink && meetingState.Event.Link is not null)
         {
             var launchResult = _browserLauncher.OpenUrl(meetingState.Event.Link.Url);
@@ -58,15 +61,13 @@ public class AcknowledgeMeeting
                     $"Failed to open meeting link: {meetingState.Event.Link.Url}",
                     StrategyName: "BrowserLauncher");
             }
-
-            linkOpened = true;
         }
 
         // Acknowledge the meeting
-        meetingState.Acknowledge();
+        meetingState = meetingState.Acknowledge(_time.UtcNow);
 
         // Update the repository
-        var updateResult = _meetingRepository.AddOrUpdate(meetingState);
+        var updateResult = _meetingRepository.Update(meetingState);
         if (updateResult.IsError)
             return new NotificationError($"Failed to update meeting state for {command.MeetingId}");
 

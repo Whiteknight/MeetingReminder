@@ -51,6 +51,11 @@ public interface IAppConfiguration
     /// List of configured calendar sources.
     /// </summary>
     IReadOnlyList<ICalendarConfiguration> Calendars { get; }
+
+    public ICalendarNotificationRules? GetCalendarNotificationRules(string calendarSource)
+        => Calendars
+            .FirstOrDefault(c => c.Name.Equals(calendarSource, StringComparison.OrdinalIgnoreCase))
+            ?.NotificationRules;
 }
 
 /// <summary>

@@ -31,7 +31,7 @@ public class IcsCalendarSource : ICalendarSource
     }
 
     /// <inheritdoc />
-    public string SourceName => _sourceName;
+    public string Name => _sourceName;
 
     /// <inheritdoc />
     public async Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(

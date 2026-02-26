@@ -1,4 +1,4 @@
-using MeetingReminder.Domain.Messaging;
+using MeetingReminder.Domain.Calendars;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 

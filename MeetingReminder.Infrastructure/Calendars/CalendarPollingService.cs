@@ -1,8 +1,8 @@
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
+using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Meetings;
-using MeetingReminder.Domain.Messaging;
 using static MeetingReminder.Domain.Assert;
 
 namespace MeetingReminder.Infrastructure.Calendars;
@@ -145,7 +145,6 @@ public class CalendarPollingService : ICalendarPollingService
         foreach (var (calendarSource, incomingMeetings) in events)
         {
             var existingResult = _meetings.GetAllByCalendar(calendarSource);
-            // TODO: Understand and handle this error case.
             if (!existingResult.IsSuccess)
                 continue;
             var existing = existingResult.GetValueOrDefault([]).ToDictionary(e => e.Event.Id);
@@ -154,14 +153,11 @@ public class CalendarPollingService : ICalendarPollingService
             {
                 if (!existing.ContainsKey(incoming.Id))
                 {
-                    _meetings.AddOrUpdate(new MeetingState(incoming));
+                    _meetings.Add(MeetingState.New(incoming));
                     continue;
                 }
 
-                // TODO: This may cause a conflict if we have two updaters running at the same time
-                // is that possible?
-                var state = existing[incoming.Id];
-                state.Event = incoming;
+                _meetings.Update(existing[incoming.Id].UpdateEvent(incoming));
                 existing.Remove(incoming.Id);
             }
 

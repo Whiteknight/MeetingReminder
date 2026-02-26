@@ -4,8 +4,8 @@ using MeetingReminder.Domain;
 using MeetingReminder.Domain.Browsers;
 using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
+using MeetingReminder.Domain.Input;
 using MeetingReminder.Domain.Meetings;
-using MeetingReminder.Domain.Messaging;
 using MeetingReminder.Domain.Notifications;
 using MeetingReminder.Infrastructure.Browser;
 using MeetingReminder.Infrastructure.Calendars;
@@ -14,13 +14,6 @@ using MeetingReminder.Infrastructure.ICal;
 using MeetingReminder.Infrastructure.Meetings;
 using MeetingReminder.Infrastructure.Notifications;
 using Microsoft.Extensions.DependencyInjection;
-using MeetingReminder.Domain.Input;
-
-#if WINDOWS
-
-using MeetingReminder.Infrastructure.Windows.Notifications;
-
-#endif
 
 namespace MeetingReminder.ConsoleTui;
 
@@ -189,24 +182,20 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddNotificationStrategies(this IServiceCollection services)
     {
-#if WINDOWS
-        // Windows-specific notification providers
-        services.AddSingleton<ISystemNotificationProvider, NotificationProvider>();
-
-        // Register all strategies as a collection
-        services.AddSingleton<IEnumerable<INotificationStrategy>>(sp =>
+        if (OperatingSystem.IsWindows())
         {
-            var notificationProvider = sp.GetRequiredService<ISystemNotificationProvider>();
-            return new List<INotificationStrategy>
-            {
-                new SystemNotificationStrategy(notificationProvider),
-                new BeepNotificationStrategy()
-            };
-        });
-#else
-        // No platform-specific strategies available
-        services.AddSingleton<IEnumerable<INotificationStrategy>>(_ => []);
-#endif
+            // Windows-specific notification providers
+            services.AddSingleton<ISystemNotificationProvider, MeetingReminder.Infrastructure.Windows.Notifications.NotificationProvider>();
+            services.AddSingleton<INotificationStrategy, SystemNotificationStrategy>();
+            services.AddSingleton<INotificationStrategy, MeetingReminder.Infrastructure.Windows.Notifications.BeepNotificationStrategy>();
+            return services;
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            services.AddSingleton<IEnumerable<INotificationStrategy>>(_ => []);
+        }
+
         return services;
     }
 }

@@ -37,13 +37,21 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     /// </summary>
     /// <param name="state">The meeting state to add or update</param>
     /// <returns>A Result indicating success or failure</returns>
-    public Result<MeetingState, Error> AddOrUpdate(MeetingState state)
+    public Result<MeetingState, Error> Add(MeetingState state)
     {
-        if (state is null)
-            return new MeetingRepositoryError("Meeting state cannot be null");
+        if (state.Event is null)
+            return new MeetingRepositoryError("Meeting state event cannot be null");
 
-        _meetings[state.Event.Id] = state;
-        return state;
+        return _meetings.TryAdd(state.Event.Id, state)
+            ? state
+            : new MeetingRepositoryError($"Meeting with ID '{state.Event.Id}' already exists");
+    }
+
+    public Result<MeetingState, Error> Update(MeetingState state)
+    {
+        if (state.Event is null)
+            return new MeetingRepositoryError("Meeting state event cannot be null");
+        return _meetings.AddOrUpdate(state.Event.Id, state, (key, existing) => state);
     }
 
     /// <summary>

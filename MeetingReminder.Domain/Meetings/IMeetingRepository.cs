@@ -24,7 +24,9 @@ public interface IMeetingRepository
 
     Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(string calendar);
 
-    Result<MeetingState, Error> AddOrUpdate(MeetingState state);
+    Result<MeetingState, Error> Add(MeetingState state);
+
+    Result<MeetingState, Error> Update(MeetingState state);
 
     Result<string, Error> Remove(string id);
 }

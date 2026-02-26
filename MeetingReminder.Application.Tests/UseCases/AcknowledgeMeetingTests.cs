@@ -22,7 +22,8 @@ public class AcknowledgeMeetingTests
         _browserLauncher = Substitute.For<IBrowserLauncher>();
         _acknowledgeMeeting = new AcknowledgeMeeting(
             _meetingRepository,
-            _browserLauncher);
+            _browserLauncher,
+            new SystemTimeProvider());
     }
 
     private static MeetingEvent CreateTestMeetingEvent(string id, MeetingLink? link = null)

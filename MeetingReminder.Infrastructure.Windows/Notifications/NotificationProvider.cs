@@ -1,6 +1,6 @@
-using Microsoft.Toolkit.Uwp.Notifications;
 using MeetingReminder.Domain.Notifications;
 using MeetingReminder.Infrastructure.Notifications;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace MeetingReminder.Infrastructure.Windows.Notifications;
 
@@ -17,6 +17,7 @@ public class NotificationProvider : ISystemNotificationProvider
             return Task.CompletedTask;
 
         var builder = new ToastContentBuilder()
+            .SetToastDuration(ToastDuration.Long)
             .AddText(title)
             .AddText(body);
 

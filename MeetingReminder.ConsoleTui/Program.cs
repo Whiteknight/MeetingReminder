@@ -48,9 +48,7 @@ public class Program
             AnsiConsole.MarkupLine($"[red]Fatal error:[/] {Markup.Escape(ex.Message)}");
             AnsiConsole.MarkupLine($"[red]Type:[/] {ex.GetType().FullName}");
             if (ex.InnerException != null)
-            {
                 AnsiConsole.MarkupLine($"[red]Inner:[/] {Markup.Escape(ex.InnerException.Message)}");
-            }
             AnsiConsole.MarkupLine($"[grey]{Markup.Escape(ex.StackTrace ?? "")}[/]");
             AnsiConsole.MarkupLine("[grey]Press any key to exit...[/]");
             Console.ReadKey(true);

@@ -43,7 +43,7 @@ public class NotificationProcessingService : IDisposable
         CalculateNotificationLevel calculateNotificationLevel,
         IAppConfiguration config,
         IMeetingRepository meetingRepository,
-        ITimeProvider? timeProvider = null,
+        ITimeProvider timeProvider,
         ILogger<NotificationProcessingService>? logger = null)
     {
         _calculateNotificationLevel = NotNull(calculateNotificationLevel);
@@ -53,15 +53,8 @@ public class NotificationProcessingService : IDisposable
         _logger = logger;
 
         // Filter to only enabled and supported strategies (Requirements 9.2, 9.3)
-        _enabledStrategies = FilterEnabledStrategies(strategies, config.EnabledNotificationStrategies);
-    }
-
-    private static IEnumerable<INotificationStrategy> FilterEnabledStrategies(
-        IEnumerable<INotificationStrategy> strategies,
-        IReadOnlyList<string> enabledNames)
-    {
-        return strategies
-            .Where(s => enabledNames.Contains(s.StrategyName, StringComparer.OrdinalIgnoreCase))
+        _enabledStrategies = strategies
+            .Where(s => config.EnabledNotificationStrategies.Contains(s.StrategyName, StringComparer.OrdinalIgnoreCase))
             .Where(s => s.IsSupported)
             .ToList();
     }
@@ -116,18 +109,16 @@ public class NotificationProcessingService : IDisposable
 
         var currentTime = _timeProvider.UtcNow;
 
-        var meetingStates = _meetings.GetAll();
-        if (meetingStates.IsError)
-            return;
-        var allStates = meetingStates.GetValueOrDefault([]);
+        var meetings = _meetings.GetAll().Map(r => r.ToArray()).GetValueOrDefault([]);
 
-        foreach (var state in allStates)
+        for (int i = 0; i < meetings.Length; i++)
         {
+            var state = meetings[i];
             if (state.IsAcknowledged)
                 continue;
 
             // Get calendar-specific notification rules
-            var rules = GetCalendarNotificationRules(state.Event.CalendarSource);
+            var rules = _config.GetCalendarNotificationRules(state.Event.CalendarSource);
             var newLevel = _calculateNotificationLevel.Calculate(new CalculateNotificationLevelQuery(
                 Meeting: state.Event,
                 CurrentTime: currentTime,
@@ -135,19 +126,11 @@ public class NotificationProcessingService : IDisposable
                 Rules: rules));
 
             // Update notification level (only escalates, never decreases - Requirement 8.5)
-            state.UpdateNotificationLevel(newLevel);
+            meetings[i] = state.UpdateNotificationLevel(newLevel, _timeProvider.UtcNow);
+            _meetings.Update(meetings[i]);
         }
 
-        // TODO: Want to group some of these together. Toast messages go individually, but beep/sound alerts need to be combined or scheduled.
-        // Execute notification strategies with appropriate methods
-        await ExecuteNotificationStrategiesAsync(allStates.Where(s => !s.IsAcknowledged && s.CurrentLevel != NotificationLevel.None).ToList());
-    }
-
-    private ICalendarNotificationRules? GetCalendarNotificationRules(string calendarSource)
-    {
-        return _config.Calendars
-            .FirstOrDefault(c => c.Name.Equals(calendarSource, StringComparison.OrdinalIgnoreCase))
-            ?.NotificationRules;
+        await ExecuteNotificationStrategiesAsync(meetings.Where(s => !s.IsAcknowledged && s.CurrentLevel != NotificationLevel.None).ToList());
     }
 
     private async Task ExecuteNotificationStrategiesAsync(IReadOnlyList<MeetingState> meetings)
@@ -170,21 +153,13 @@ public class NotificationProcessingService : IDisposable
     {
         // Always execute per-cycle notifications (e.g., beeps, sounds)
         var cycleResult = await strategy.ExecuteOnCycleAsync(meetings);
-        if (!cycleResult.IsSuccess)
-        {
-            var error = cycleResult.GetErrorOrDefault(null!);
-            _logger?.LogWarning("Notification strategy {Strategy} cycle execution failed: {Error}", strategy.StrategyName, error?.Message);
-        }
+        cycleResult.OnError(error => _logger?.LogWarning("Notification strategy {Strategy} cycle execution failed: {Error}", strategy.StrategyName, error?.Message));
 
         // Only execute level-change notifications when level actually changed (e.g., toasts)
         foreach (var meeting in meetings.Where(m => m.NotificationLevelHasChanged))
         {
             var levelChangeResult = await strategy.ExecuteOnLevelChangeAsync(meeting);
-            if (!levelChangeResult.IsSuccess)
-            {
-                var error = levelChangeResult.Match(_ => (NotificationError?)null, e => e);
-                _logger?.LogWarning("Notification strategy {Strategy} level change execution failed: {Error}", strategy.StrategyName, error?.Message);
-            }
+            levelChangeResult.OnError(error => _logger?.LogWarning("Notification strategy {Strategy} level change execution failed: {Error}", strategy.StrategyName, error?.Message));
         }
     }
 

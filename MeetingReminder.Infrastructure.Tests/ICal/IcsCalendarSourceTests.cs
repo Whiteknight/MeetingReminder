@@ -242,7 +242,7 @@ END:VCALENDAR";
         var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "My Calendar");
 
         // Act & Assert
-        source.SourceName.Should().Be("My Calendar");
+        source.Name.Should().Be("My Calendar");
     }
 
     [Test]

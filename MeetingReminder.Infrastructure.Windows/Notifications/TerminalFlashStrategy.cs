@@ -20,30 +20,21 @@ public class TerminalFlashStrategy : INotificationStrategy
     /// Terminal flash doesn't execute on every cycle to avoid excessive visual distraction.
     /// </summary>
     public Task<Result<NotificationLevel, NotificationError>> ExecuteOnCycleAsync(IReadOnlyList<MeetingState> meetings)
-    {
-        // Terminal flash only happens on level change, not every cycle
-        return Task.FromResult<Result<NotificationLevel, NotificationError>>(NotificationLevel.None);
-    }
+        => Task.FromResult<Result<NotificationLevel, NotificationError>>(NotificationLevel.None);
 
     /// <summary>
     /// Flashes the terminal window when the notification level escalates.
     /// </summary>
     public Task<Result<Unit, NotificationError>> ExecuteOnLevelChangeAsync(MeetingState meeting)
-    {
-        return Task.FromResult(Execute(meeting.CurrentLevel));
-    }
+        => Task.FromResult(Execute(meeting.CurrentLevel));
 
     private Result<Unit, NotificationError> Execute(NotificationLevel level)
     {
         if (!IsSupported)
-        {
             return new NotificationError("Terminal flash is not supported on this platform", StrategyName);
-        }
 
         if (level == NotificationLevel.None)
-        {
             return Unit.Value;
-        }
 
         try
         {

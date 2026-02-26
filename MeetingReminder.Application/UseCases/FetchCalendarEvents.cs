@@ -65,8 +65,8 @@ public class FetchCalendarEvents
             cancellationToken);
 
         return result.Match(
-            events => new SourceFetchResult(source.SourceName, events, null),
-            error => new SourceFetchResult(source.SourceName, null, error));
+            events => new SourceFetchResult(source.Name, events, null),
+            error => new SourceFetchResult(source.Name, null, error));
     }
 
     private Result<IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>>, CalendarError> AggregateAndEnrichResults(

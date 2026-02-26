@@ -23,7 +23,7 @@ namespace MeetingReminder.ConsoleTui.Services;
 public class MeetingReminderTuiService : BackgroundService
 {
     // TODO: Separate out the UI-building and rendering from the other timer-based logic
-    private const int _maxRows = 5;
+    private const int _maxRows = 10;
 
     private static readonly string[] _spinnerFrames = ["|", "/", "-", "\\"];
     private static readonly TimeSpan _tick = TimeSpan.FromMilliseconds(100);
@@ -33,9 +33,7 @@ public class MeetingReminderTuiService : BackgroundService
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ITimeProvider _timeProvider;
     private readonly ILogger<MeetingReminderTuiService> _logger;
-    private readonly TimeSpan _pollingInterval;
 
-    private DateTime _lastPollTime = DateTime.UtcNow;
     private int _spinnerIndex;
     private int _selectedMeetingIndex = -1; // -1 = auto-select next upcoming meeting
 
@@ -53,7 +51,6 @@ public class MeetingReminderTuiService : BackgroundService
         _acknowledgeMeeting = acknowledgeMeeting;
         _applicationLifetime = applicationLifetime;
         _timeProvider = timeProvider;
-        _pollingInterval = configuration.PollingInterval;
         _logger = logger;
     }
 
@@ -63,7 +60,8 @@ public class MeetingReminderTuiService : BackgroundService
 
         try
         {
-            await AnsiConsole.Live(BuildDisplay())
+            var initial = GetSortedEvents();
+            await AnsiConsole.Live(BuildDisplay(_spinnerIndex, initial, _selectedMeetingIndex))
                 .AutoClear(true)
                 .Overflow(VerticalOverflow.Ellipsis)
                 .StartAsync(async ctx =>
@@ -74,7 +72,8 @@ public class MeetingReminderTuiService : BackgroundService
 
                         _spinnerIndex = (_spinnerIndex + 1) % _spinnerFrames.Length;
 
-                        ctx.UpdateTarget(BuildDisplay());
+                        var meetings = GetSortedEvents();
+                        ctx.UpdateTarget(BuildDisplay(_spinnerIndex, meetings, _selectedMeetingIndex));
                         await Task.Delay(_tick, stoppingToken);
                     }
                 });
@@ -127,7 +126,7 @@ public class MeetingReminderTuiService : BackgroundService
     private async Task HandleAcknowledgeAsync(bool openLink, CancellationToken cancellationToken)
     {
         var selectedMeeting = GetSelectedMeeting();
-        if (selectedMeeting is null)
+        if (selectedMeeting.Event is null)
         {
             _logger.LogDebug("No meeting selected to acknowledge");
             return;
@@ -149,11 +148,11 @@ public class MeetingReminderTuiService : BackgroundService
     // Navigation state
     // -------------------------------------------------------------------------
 
-    public MeetingState? GetSelectedMeeting()
+    public MeetingState GetSelectedMeeting()
     {
         var sorted = GetSortedEvents();
         if (sorted.Count == 0)
-            return null;
+            return default;
 
         if (_selectedMeetingIndex >= 0 && _selectedMeetingIndex < sorted.Count)
             return sorted[_selectedMeetingIndex];
@@ -187,12 +186,10 @@ public class MeetingReminderTuiService : BackgroundService
             _selectedMeetingIndex++;
     }
 
-    public int GetSelectedIndex() => _selectedMeetingIndex;
-
-    private MeetingState? GetNextUpcomingMeeting(IReadOnlyList<MeetingState> sorted)
+    private MeetingState GetNextUpcomingMeeting(IReadOnlyList<MeetingState> sorted)
     {
         var now = _timeProvider.UtcNow;
-        return sorted.FirstOrDefault(e => e.Event.StartTime > now) ?? sorted.FirstOrDefault();
+        return sorted.FirstOrDefault(e => e.Event.StartTime > now);
     }
 
     private IReadOnlyList<MeetingState> GetSortedEvents()
@@ -204,50 +201,31 @@ public class MeetingReminderTuiService : BackgroundService
     // Rendering
     // -------------------------------------------------------------------------
 
-    private IRenderable BuildDisplay()
+    private static IRenderable BuildDisplay(int tick, IReadOnlyList<MeetingState> meetings, int selectedMeetingIndex)
     {
         return new Rows(
-            BuildHeader(),
-            BuildMeetingsPanel(),
+            BuildHeader(tick),
+            BuildMeetingsPanel(meetings, selectedMeetingIndex),
             BuildKeyboardHints());
     }
 
-    private IRenderable BuildHeader()
+    private static IRenderable BuildHeader(int tick)
     {
-        var nextPollTime = _lastPollTime + _pollingInterval;
-        var timeUntilNextPoll = nextPollTime - _timeProvider.UtcNow;
-        if (timeUntilNextPoll < TimeSpan.Zero)
-            timeUntilNextPoll = TimeSpan.Zero;
-
-        var spinner = _spinnerFrames[_spinnerIndex];
-        var countdown = FormatCountdown(timeUntilNextPoll);
-
-        return new Markup(
-            $"[grey]Last updated: {_lastPollTime.ToLocalTime():HH:mm:ss}[/]  " +
-            $"[cyan]{spinner}[/] [grey]Next poll in {countdown}[/]");
+        var spinner = _spinnerFrames[tick % _spinnerFrames.Length];
+        return new Markup($"[grey]Meeting monitor[/] [cyan]{spinner}[/]");
     }
 
-    private static string FormatCountdown(TimeSpan t)
-    {
-        if (t.TotalSeconds < 1)
-            return "now...";
-        if (t.TotalMinutes >= 1)
-            return $"{(int)t.TotalMinutes}m {t.Seconds}s";
-        return $"{t.Seconds}s";
-    }
-
-    private IRenderable BuildMeetingsPanel() =>
-        new Panel(BuildEventsTable())
+    private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int selectedMeetingIndex) =>
+        new Panel(BuildEventsTable(meetings, selectedMeetingIndex))
             .Header("[yellow]Upcoming Meetings[/]")
             .Border(BoxBorder.Rounded)
+            .BorderColor(Color.DarkSlateGray1)
             .Expand();
 
-    private IRenderable BuildEventsTable()
+    private static IRenderable BuildEventsTable(IReadOnlyList<MeetingState> meetings, int selectedMeetingIndex)
     {
         var table = CreateEventsTableStructure();
-
-        var sorted = GetSortedEvents();
-        if (sorted.Count == 0)
+        if (meetings.Count == 0)
         {
             PadBlankRows(table, _maxRows);
             return new Rows(
@@ -255,8 +233,11 @@ public class MeetingReminderTuiService : BackgroundService
                 new Markup("[yellow]No upcoming meetings in the next 7 days.[/]"));
         }
 
-        var visibleMeetings = sorted.Take(_maxRows).ToList();
-        var selectedIndex = _selectedMeetingIndex >= 0 && _selectedMeetingIndex < sorted.Count ? _selectedMeetingIndex : 0;
+        if (selectedMeetingIndex < 0)
+            selectedMeetingIndex = 0;
+
+        var visibleMeetings = meetings.Take(_maxRows).ToList();
+        var selectedIndex = selectedMeetingIndex >= 0 && selectedMeetingIndex < meetings.Count ? selectedMeetingIndex : 0;
 
         for (int i = 0; i < visibleMeetings.Count; i++)
         {
@@ -267,13 +248,13 @@ public class MeetingReminderTuiService : BackgroundService
 
         PadBlankRows(table, _maxRows - visibleMeetings.Count);
 
-        var selectionInfo = _selectedMeetingIndex >= 0
-            ? $"Selected: {_selectedMeetingIndex + 1}/{visibleMeetings.Count}"
-            : $"Auto-selected next meeting ({sorted.Count} total)";
+        var selectionInfo = selectedMeetingIndex >= 0
+            ? $"Selected: {selectedMeetingIndex + 1}/{visibleMeetings.Count}"
+            : $"Auto-selected next meeting ({meetings.Count} total)";
 
         return new Rows(
             table,
-            new Markup($"[green]Found {sorted.Count} upcoming event(s).[/] [grey]{selectionInfo}[/]"));
+            new Markup($"[green]Found {meetings.Count} upcoming event(s).[/] [grey]{selectionInfo}[/]"));
     }
 
     private static Table CreateEventsTableStructure()
@@ -305,18 +286,12 @@ public class MeetingReminderTuiService : BackgroundService
         var link = meeting.Event.Link != null ? $"[green]{GetLinkTypeName(meeting.Event.Link)}[/]" : "[grey]-[/]";
         var status = GetStatusIndicator(meeting);
 
-        if (isSelected)
-        {
-            title = $"[cyan]{title}[/]";
-            start = $"[cyan]{start}[/]";
-            end = $"[cyan]{end}[/]";
-        }
-        else if (meeting?.CurrentLevel >= NotificationLevel.Urgent)
+        if (meeting.CurrentLevel >= NotificationLevel.Urgent)
         {
             title = $"[red]{title}[/]";
             start = $"[red]{start}[/]";
         }
-        else if (meeting?.CurrentLevel >= NotificationLevel.Moderate)
+        else if (meeting.CurrentLevel >= NotificationLevel.Moderate)
         {
             title = $"[yellow]{title}[/]";
             start = $"[yellow]{start}[/]";
@@ -325,18 +300,18 @@ public class MeetingReminderTuiService : BackgroundService
         table.AddRow(indicator, start, end, title, link, status);
     }
 
-    private static string GetStatusIndicator(MeetingState? state)
+    private static string GetStatusIndicator(MeetingState state)
     {
-        if (state == null)
+        if (state.Event == null)
             return "[grey]-[/]";
         if (state.IsAcknowledged)
             return "[green]OK Acknowledged[/]";
         return state.CurrentLevel switch
         {
-            NotificationLevel.Critical => "[red]!! CRITICAL[/]",
-            NotificationLevel.Urgent => "[orange1]! Urgent[/]",
-            NotificationLevel.Moderate => "[yellow]* Moderate[/]",
-            NotificationLevel.Gentle => "[blue]~ Gentle[/]",
+            NotificationLevel.Critical => "[red bold]!! STARTED !![/]",
+            NotificationLevel.Urgent => "[orange1]! Starting ![/]",
+            NotificationLevel.Moderate => "[yellow]Get Ready[/]",
+            NotificationLevel.Gentle => "[blue]On Deck[/]",
             _ => "[grey]-[/]"
         };
     }

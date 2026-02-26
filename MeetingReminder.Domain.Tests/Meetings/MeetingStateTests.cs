@@ -31,10 +31,10 @@ public class MeetingStateTests
         [Test]
         public void WhenEscalating_UpdatesLevel()
         {
-            var state = new MeetingState(CreateTestMeeting());
+            var state = MeetingState.New(CreateTestMeeting());
             state.CurrentLevel.Should().Be(NotificationLevel.None);
 
-            state.UpdateNotificationLevel(NotificationLevel.Gentle);
+            state = state.UpdateNotificationLevel(NotificationLevel.Gentle, DateTime.UtcNow);
 
             state.CurrentLevel.Should().Be(NotificationLevel.Gentle);
         }
@@ -42,10 +42,10 @@ public class MeetingStateTests
         [Test]
         public void WhenDeescalating_DoesNotUpdateLevel()
         {
-            var state = new MeetingState(CreateTestMeeting());
-            state.UpdateNotificationLevel(NotificationLevel.Urgent);
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Urgent, DateTime.UtcNow);
 
-            state.UpdateNotificationLevel(NotificationLevel.Gentle);
+            state = state.UpdateNotificationLevel(NotificationLevel.Gentle, DateTime.UtcNow);
 
             state.CurrentLevel.Should().Be(NotificationLevel.Urgent);
         }
@@ -53,10 +53,10 @@ public class MeetingStateTests
         [Test]
         public void WhenSameLevel_DoesNotChange()
         {
-            var state = new MeetingState(CreateTestMeeting());
-            state.UpdateNotificationLevel(NotificationLevel.Moderate);
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Moderate, DateTime.UtcNow);
 
-            state.UpdateNotificationLevel(NotificationLevel.Moderate);
+            state = state.UpdateNotificationLevel(NotificationLevel.Moderate, DateTime.UtcNow);
 
             state.CurrentLevel.Should().Be(NotificationLevel.Moderate);
         }
@@ -64,31 +64,30 @@ public class MeetingStateTests
         [Test]
         public void CanEscalateThroughAllLevels()
         {
-            var state = new MeetingState(CreateTestMeeting());
+            var state = MeetingState.New(CreateTestMeeting());
 
-            state.UpdateNotificationLevel(NotificationLevel.Gentle);
+            state = state.UpdateNotificationLevel(NotificationLevel.Gentle, DateTime.UtcNow);
             state.CurrentLevel.Should().Be(NotificationLevel.Gentle);
 
-            state.UpdateNotificationLevel(NotificationLevel.Moderate);
+            state = state.UpdateNotificationLevel(NotificationLevel.Moderate, DateTime.UtcNow);
             state.CurrentLevel.Should().Be(NotificationLevel.Moderate);
 
-            state.UpdateNotificationLevel(NotificationLevel.Urgent);
+            state = state.UpdateNotificationLevel(NotificationLevel.Urgent, DateTime.UtcNow);
             state.CurrentLevel.Should().Be(NotificationLevel.Urgent);
 
-            state.UpdateNotificationLevel(NotificationLevel.Critical);
+            state = state.UpdateNotificationLevel(NotificationLevel.Critical, DateTime.UtcNow);
             state.CurrentLevel.Should().Be(NotificationLevel.Critical);
         }
 
         [Test]
         public void CannotDeescalateFromCritical()
         {
-            var state = new MeetingState(CreateTestMeeting());
-            state.UpdateNotificationLevel(NotificationLevel.Critical);
-
-            state.UpdateNotificationLevel(NotificationLevel.Urgent);
-            state.UpdateNotificationLevel(NotificationLevel.Moderate);
-            state.UpdateNotificationLevel(NotificationLevel.Gentle);
-            state.UpdateNotificationLevel(NotificationLevel.None);
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Critical, DateTime.UtcNow);
+            state = state.UpdateNotificationLevel(NotificationLevel.Urgent, DateTime.UtcNow);
+            state = state.UpdateNotificationLevel(NotificationLevel.Moderate, DateTime.UtcNow);
+            state = state.UpdateNotificationLevel(NotificationLevel.Gentle, DateTime.UtcNow);
+            state = state.UpdateNotificationLevel(NotificationLevel.None, DateTime.UtcNow);
 
             state.CurrentLevel.Should().Be(NotificationLevel.Critical);
         }
@@ -100,10 +99,10 @@ public class MeetingStateTests
         [Test]
         public void SetsIsAcknowledgedToTrue()
         {
-            var state = new MeetingState(CreateTestMeeting());
+            var state = MeetingState.New(CreateTestMeeting());
             state.IsAcknowledged.Should().BeFalse();
 
-            state.Acknowledge();
+            state = state.Acknowledge(DateTime.UtcNow);
 
             state.IsAcknowledged.Should().BeTrue();
         }
@@ -111,10 +110,10 @@ public class MeetingStateTests
         [Test]
         public void ResetsNotificationLevelToNone()
         {
-            var state = new MeetingState(CreateTestMeeting());
-            state.UpdateNotificationLevel(NotificationLevel.Critical);
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Critical, DateTime.UtcNow);
 
-            state.Acknowledge();
+            state = state.Acknowledge(DateTime.UtcNow);
 
             state.CurrentLevel.Should().Be(NotificationLevel.None);
         }
@@ -122,41 +121,13 @@ public class MeetingStateTests
         [Test]
         public void WhenAlreadyAcknowledged_RemainsAcknowledged()
         {
-            var state = new MeetingState(CreateTestMeeting());
-            state.Acknowledge();
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.Acknowledge(DateTime.UtcNow);
 
-            state.Acknowledge();
+            state = state.Acknowledge(DateTime.UtcNow);
 
             state.IsAcknowledged.Should().BeTrue();
             state.CurrentLevel.Should().Be(NotificationLevel.None);
-        }
-    }
-
-    [TestFixture]
-    public sealed class UpdateLastNotificationTimeTests : MeetingStateTests
-    {
-        [Test]
-        public void UpdatesTimestamp()
-        {
-            var state = new MeetingState(CreateTestMeeting());
-            var timestamp = new DateTime(2025, 1, 15, 14, 30, 0);
-
-            state.UpdateLastNotificationTime(timestamp);
-
-            state.LastNotificationTime.Should().Be(timestamp);
-        }
-
-        [Test]
-        public void CanBeUpdatedMultipleTimes()
-        {
-            var state = new MeetingState(CreateTestMeeting());
-            var firstTimestamp = new DateTime(2025, 1, 15, 14, 0, 0);
-            var secondTimestamp = new DateTime(2025, 1, 15, 14, 30, 0);
-
-            state.UpdateLastNotificationTime(firstTimestamp);
-            state.UpdateLastNotificationTime(secondTimestamp);
-
-            state.LastNotificationTime.Should().Be(secondTimestamp);
         }
     }
 
@@ -167,7 +138,7 @@ public class MeetingStateTests
         public void Constructor_InitializesWithCorrectDefaults()
         {
             var meeting = CreateTestMeeting();
-            var state = new MeetingState(meeting);
+            var state = MeetingState.New(meeting);
 
             state.Event.Should().BeSameAs(meeting);
             state.CurrentLevel.Should().Be(NotificationLevel.None);

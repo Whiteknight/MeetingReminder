@@ -1,4 +1,4 @@
-namespace MeetingReminder.Domain.Messaging;
+namespace MeetingReminder.Domain.Calendars;
 
 /// <summary>
 /// Abstraction for the calendar polling service.
