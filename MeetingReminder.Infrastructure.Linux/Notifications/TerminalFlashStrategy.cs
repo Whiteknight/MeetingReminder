@@ -19,30 +19,26 @@ public class TerminalFlashStrategy : INotificationStrategy
     /// <summary>
     /// Terminal flash doesn't execute on every cycle to avoid notification spam.
     /// </summary>
-    public Task<Result<Unit, NotificationError>> ExecuteOnCycleAsync(NotificationLevel level, MeetingEvent meeting)
+    public Task<Result<NotificationLevel, NotificationError>> ExecuteOnCycleAsync(IReadOnlyList<MeetingState> meetings)
     {
         // Terminal flash only happens on level change, not every cycle
-        return Task.FromResult<Result<Unit, NotificationError>>(Unit.Value);
+        return Task.FromResult<Result<NotificationLevel, NotificationError>>(NotificationLevel.None);
     }
 
     /// <summary>
     /// Shows a notification when the notification level escalates.
     /// </summary>
-    public Task<Result<Unit, NotificationError>> ExecuteOnLevelChangeAsync(
-        NotificationLevel previousLevel,
-        NotificationLevel newLevel,
-        MeetingEvent meeting)
+    public Task<Result<Unit, NotificationError>> ExecuteOnLevelChangeAsync(MeetingState meeting)
     {
-        return Task.FromResult(Execute(newLevel, meeting));
+        return Task.FromResult(Execute(meeting));
     }
 
-    private Result<Unit, NotificationError> Execute(NotificationLevel level, MeetingEvent meeting)
+    private Result<Unit, NotificationError> Execute(MeetingState meeting)
     {
         if (!IsSupported)
-        {
             return new NotificationError("Terminal flash is not supported on this platform", StrategyName);
-        }
 
+        var level = meeting.CurrentLevel;
         if (level == NotificationLevel.None)
         {
             return Unit.Value;
@@ -59,11 +55,11 @@ public class TerminalFlashStrategy : INotificationStrategy
         }
     }
 
-    private static void FlashWindow(NotificationLevel level, MeetingEvent meeting)
+    private static void FlashWindow(NotificationLevel level, MeetingState meeting)
     {
         var urgency = GetLinuxUrgency(level);
-        var title = $"Meeting Reminder: {meeting.Title}";
-        var body = $"Starting at {meeting.StartTime:HH:mm}";
+        var title = $"Meeting Reminder: {meeting.Event.Title}";
+        var body = $"Starting at {meeting.Event.StartTime:HH:mm}";
 
         var startInfo = new ProcessStartInfo
         {

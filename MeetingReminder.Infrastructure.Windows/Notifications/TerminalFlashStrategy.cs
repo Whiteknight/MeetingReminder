@@ -1,7 +1,7 @@
+using System.Runtime.InteropServices;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
-using System.Runtime.InteropServices;
 
 namespace MeetingReminder.Infrastructure.Windows.Notifications;
 
@@ -19,21 +19,18 @@ public class TerminalFlashStrategy : INotificationStrategy
     /// <summary>
     /// Terminal flash doesn't execute on every cycle to avoid excessive visual distraction.
     /// </summary>
-    public Task<Result<Unit, NotificationError>> ExecuteOnCycleAsync(NotificationLevel level, MeetingEvent meeting)
+    public Task<Result<NotificationLevel, NotificationError>> ExecuteOnCycleAsync(IReadOnlyList<MeetingState> meetings)
     {
         // Terminal flash only happens on level change, not every cycle
-        return Task.FromResult<Result<Unit, NotificationError>>(Unit.Value);
+        return Task.FromResult<Result<NotificationLevel, NotificationError>>(NotificationLevel.None);
     }
 
     /// <summary>
     /// Flashes the terminal window when the notification level escalates.
     /// </summary>
-    public Task<Result<Unit, NotificationError>> ExecuteOnLevelChangeAsync(
-        NotificationLevel previousLevel,
-        NotificationLevel newLevel,
-        MeetingEvent meeting)
+    public Task<Result<Unit, NotificationError>> ExecuteOnLevelChangeAsync(MeetingState meeting)
     {
-        return Task.FromResult(Execute(newLevel));
+        return Task.FromResult(Execute(meeting.CurrentLevel));
     }
 
     private Result<Unit, NotificationError> Execute(NotificationLevel level)

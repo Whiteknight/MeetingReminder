@@ -19,6 +19,8 @@ public class MeetingState
     /// </summary>
     public NotificationLevel CurrentLevel { get; private set; }
 
+    public NotificationLevel PreviousLevel { get; private set; }
+
     /// <summary>
     /// Indicates whether the user has acknowledged this meeting
     /// </summary>
@@ -33,6 +35,7 @@ public class MeetingState
     {
         Event = NotNull(meetingEvent);
         CurrentLevel = NotificationLevel.None;
+        PreviousLevel = NotificationLevel.None;
         IsAcknowledged = false;
         LastNotificationTime = DateTime.MinValue;
     }
@@ -48,9 +51,12 @@ public class MeetingState
         // Only allow escalation - notification level can only increase
         if (level > CurrentLevel)
         {
+            PreviousLevel = CurrentLevel;
             CurrentLevel = level;
             return true;
         }
+        if (level == CurrentLevel)
+            PreviousLevel = CurrentLevel;
         return false;
     }
 
@@ -62,6 +68,7 @@ public class MeetingState
     {
         IsAcknowledged = true;
         CurrentLevel = NotificationLevel.None;
+        PreviousLevel = NotificationLevel.None;
     }
 
     /// <summary>
@@ -72,4 +79,6 @@ public class MeetingState
     {
         LastNotificationTime = timestamp;
     }
+
+    public bool NotificationLevelHasChanged => CurrentLevel > PreviousLevel;
 }

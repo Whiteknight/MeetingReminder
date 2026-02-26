@@ -22,6 +22,7 @@ namespace MeetingReminder.ConsoleTui.Services;
 /// </summary>
 public class MeetingReminderTuiService : BackgroundService
 {
+    // TODO: Separate out the UI-building and rendering from the other timer-based logic
     private const int _maxRows = 5;
 
     private static readonly string[] _spinnerFrames = ["|", "/", "-", "\\"];

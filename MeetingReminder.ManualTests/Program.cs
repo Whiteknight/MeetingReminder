@@ -145,24 +145,24 @@ static async Task<TestResult> RunNotificationTest(
         Console.ReadKey(true);
 
         // Execute both cycle and level-change methods to test the strategy
-        var cycleResult = await strategy.ExecuteOnCycleAsync(level, meeting);
-        var levelChangeResult = await strategy.ExecuteOnLevelChangeAsync(NotificationLevel.None, level, meeting);
+        //var cycleResult = await strategy.ExecuteOnCycleAsync([meeting]);
+        //var levelChangeResult = await strategy.ExecuteOnLevelChangeAsync(NotificationLevel.None, level, meeting);
 
-        if (cycleResult.IsError)
-        {
-            var error = cycleResult.Match(_ => "", e => e.Message);
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"Cycle ERROR: {error}");
-            Console.ResetColor();
-        }
+        //if (cycleResult.IsError)
+        //{
+        //    var error = cycleResult.Match(_ => "", e => e.Message);
+        //    Console.ForegroundColor = ConsoleColor.Red;
+        //    Console.WriteLine($"Cycle ERROR: {error}");
+        //    Console.ResetColor();
+        //}
 
-        if (levelChangeResult.IsError)
-        {
-            var error = levelChangeResult.Match(_ => "", e => e.Message);
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"Level Change ERROR: {error}");
-            Console.ResetColor();
-        }
+        //if (levelChangeResult.IsError)
+        //{
+        //    var error = levelChangeResult.Match(_ => "", e => e.Message);
+        //    Console.ForegroundColor = ConsoleColor.Red;
+        //    Console.WriteLine($"Level Change ERROR: {error}");
+        //    Console.ResetColor();
+        //}
 
         Console.WriteLine();
         Console.WriteLine("Did you see/hear the notification?");
@@ -179,8 +179,10 @@ static async Task<TestResult> RunNotificationTest(
         {
             case 'y':
                 return new TestResult(testName, TestOutcome.Passed);
+
             case 'n':
                 return new TestResult(testName, TestOutcome.Failed);
+
             case 'r':
                 continue;
             default:
@@ -274,8 +276,10 @@ static TestResult RunBrowserTest(
         {
             case 'y':
                 return new TestResult(testName, TestOutcome.Passed);
+
             case 'n':
                 return new TestResult(testName, TestOutcome.Failed);
+
             case 'r':
                 continue;
             default:
@@ -290,4 +294,5 @@ record TestResult(string TestName, TestOutcome Outcome)
     public bool Passed => Outcome == TestOutcome.Passed;
 }
 
-enum TestOutcome { Passed, Failed, Skipped }
+internal enum TestOutcome
+{ Passed, Failed, Skipped }

@@ -1,4 +1,3 @@
-using MeetingReminder.Domain;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
@@ -31,7 +30,7 @@ public class CalculateNotificationLevel
     /// </summary>
     /// <param name="query">The query containing meeting, current time, and configuration</param>
     /// <returns>Result containing the calculated NotificationLevel or an error</returns>
-    public Result<NotificationLevel, NotificationError> Calculate(CalculateNotificationLevelQuery query)
+    public NotificationLevel Calculate(CalculateNotificationLevelQuery query)
     {
         var meeting = query.Meeting;
         var currentTime = query.CurrentTime;

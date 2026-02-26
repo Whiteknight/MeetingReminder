@@ -110,16 +110,6 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds the calendar display service for TUI updates.
-    /// This is the legacy single-panel display service.
-    /// </summary>
-    public static IServiceCollection AddCalendarDisplay(this IServiceCollection services)
-    {
-        services.AddHostedService<CalendarDisplayService>();
-        return services;
-    }
-
-    /// <summary>
     /// Adds the enhanced three-panel TUI service.
     /// The event loop reads key presses via IKeyboardInputHandler (pure mapper),
     /// then handles the resulting TuiCommand internally.
