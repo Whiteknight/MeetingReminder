@@ -119,7 +119,7 @@ public class CalendarPollingService : ICalendarPollingService
             var now = _timeProvider.UtcNow;
             var query = new FetchCalendarEventsQuery(
                 StartTime: now,
-                EndTime: now.AddDays(7));
+                EndTime: new DateTime(now.Year, now.Month, now.Day, 23, 59, 59));
 
             var result = await _fetchCalendarEvents.Fetch(query, cancellationToken);
 
