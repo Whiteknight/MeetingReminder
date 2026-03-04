@@ -24,7 +24,7 @@ public class BeepNotificationStrategy : INotificationStrategy
             return new NotificationError("Beep notification is not supported on this platform", StrategyName);
 
         var level = meetings.Max(m => m.CurrentLevel);
-        if (level == NotificationLevel.None)
+        if (level == NotificationLevel.None || level == NotificationLevel.Gentle)
             return NotificationLevel.None;
 
         try
@@ -58,10 +58,8 @@ public class BeepNotificationStrategy : INotificationStrategy
     private static (int Frequency, int Duration, int Repetitions) GetBeepParameters(NotificationLevel level)
         => level switch
         {
-            NotificationLevel.Gentle => (800, 300, 1),
-            NotificationLevel.Moderate => (1000, 400, 2),
-            NotificationLevel.Urgent => (1200, 500, 3),
-            NotificationLevel.Critical => (1500, 600, 4),
+            NotificationLevel.Urgent => (1000, 300, 1),
+            NotificationLevel.Critical => (1200, 500, 3),
             _ => (800, 300, 1)
         };
 }
