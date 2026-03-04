@@ -74,7 +74,7 @@ public class SystemNotificationStrategy : INotificationStrategy
     {
         var timeInfo = meeting.CurrentLevel == NotificationLevel.Critical
             ? "Meeting has started!"
-            : $"Starts at {meeting.Event.StartTime:HH:mm}";
+            : $"Starts at {meeting.Event.StartTime.ToLocalTime():HH:mm}";
 
         var locationInfo = string.IsNullOrEmpty(meeting.Event.Location)
             ? string.Empty

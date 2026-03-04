@@ -1,20 +1,29 @@
-﻿using MeetingReminder.Domain;
+﻿using System.Threading.Channels;
+using MeetingReminder.Domain;
 
 namespace MeetingReminder.Infrastructure.Threading;
 
 public sealed class AsyncAutoResetEvent : IChangeNotifier
 {
-    private volatile TaskCompletionSource<bool> _tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly Channel<bool> _channel;
+
+    public AsyncAutoResetEvent()
+    {
+        _channel = Channel.CreateBounded<bool>(new BoundedChannelOptions(10)
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            FullMode = BoundedChannelFullMode.DropOldest
+        });
+    }
 
     public Task WaitAsync(CancellationToken cancellationToken)
     {
-        return _tcs.Task.WaitAsync(cancellationToken);
+        return _channel.Reader.ReadAsync(cancellationToken).AsTask();
     }
 
     public void Set()
     {
-        var tcs = _tcs;
-        Interlocked.CompareExchange(ref _tcs, new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously), tcs);
-        tcs.TrySetResult(true);
+        _channel.Writer.TryWrite(true);
     }
 }
