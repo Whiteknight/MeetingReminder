@@ -1,7 +1,7 @@
-using MeetingReminder.Domain;
-using MeetingReminder.Domain.Configuration;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MeetingReminder.Domain;
+using MeetingReminder.Domain.Configuration;
 
 namespace MeetingReminder.Infrastructure.Configuration;
 
@@ -11,7 +11,7 @@ namespace MeetingReminder.Infrastructure.Configuration;
 /// </summary>
 public sealed class JsonConfigurationManager : IConfigurationManager
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -54,7 +54,7 @@ public sealed class JsonConfigurationManager : IConfigurationManager
             if (string.IsNullOrWhiteSpace(json))
                 return AppConfiguration.Default;
 
-            var config = JsonSerializer.Deserialize<AppConfiguration>(json, JsonOptions);
+            var config = JsonSerializer.Deserialize<AppConfiguration>(json, _jsonOptions);
             if (config is null)
                 return AppConfiguration.Default;
 
@@ -94,7 +94,7 @@ public sealed class JsonConfigurationManager : IConfigurationManager
             var concreteConfig = configuration as AppConfiguration
                 ?? ConvertToAppConfiguration(configuration);
 
-            var json = JsonSerializer.Serialize(concreteConfig, JsonOptions);
+            var json = JsonSerializer.Serialize(concreteConfig, _jsonOptions);
             File.WriteAllText(_configPath, json);
 
             return Unit.Value;
@@ -129,7 +129,8 @@ public sealed class JsonConfigurationManager : IConfigurationManager
         return new NotificationThresholds(
             GentleMinutes: thresholds.GentleMinutes,
             ModerateMinutes: thresholds.ModerateMinutes,
-            UrgentMinutes: thresholds.UrgentMinutes);
+            UrgentMinutes: thresholds.UrgentMinutes,
+            CriticalMinutes: thresholds.CriticalMinutes);
     }
 
     private static CalendarConfiguration ConvertCalendar(ICalendarConfiguration calendar)

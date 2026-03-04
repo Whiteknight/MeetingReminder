@@ -6,11 +6,12 @@ using Spectre.Console;
 
 namespace MeetingReminder.ConsoleTui;
 
-public class Program
+public static class Program
 {
     public static async Task Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
+        Console.Title = "Reminders";
 
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
 

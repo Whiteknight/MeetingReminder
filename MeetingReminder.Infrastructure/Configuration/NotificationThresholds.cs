@@ -12,7 +12,8 @@ namespace MeetingReminder.Infrastructure.Configuration;
 public record NotificationThresholds(
     TimeSpan GentleMinutes,
     TimeSpan ModerateMinutes,
-    TimeSpan UrgentMinutes) : INotificationThresholds
+    TimeSpan UrgentMinutes,
+    TimeSpan CriticalMinutes) : INotificationThresholds
 {
     /// <summary>
     /// Default notification thresholds:
@@ -25,7 +26,8 @@ public record NotificationThresholds(
         => new(
             GentleMinutes: TimeSpan.FromMinutes(10),
             ModerateMinutes: TimeSpan.FromMinutes(5),
-            UrgentMinutes: TimeSpan.FromMinutes(1));
+            UrgentMinutes: TimeSpan.FromMinutes(3),
+            CriticalMinutes: TimeSpan.FromMinutes(1));
 
     /// <summary>
     /// Validates that the thresholds are in the correct order (Gentle > Moderate > Urgent > 0).

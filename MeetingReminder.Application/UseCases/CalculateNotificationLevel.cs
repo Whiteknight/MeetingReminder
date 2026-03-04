@@ -62,7 +62,7 @@ public class CalculateNotificationLevel
         var timeUntilStart = meeting.GetTimeUntilStart(currentTime);
 
         // At or past meeting start time = Critical (Requirement 8.3)
-        if (timeUntilStart <= TimeSpan.Zero)
+        if (timeUntilStart <= thresholds.CriticalMinutes)
             return NotificationLevel.Critical;
 
         // Within urgent threshold (Requirement 8.2)

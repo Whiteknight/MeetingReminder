@@ -52,7 +52,7 @@ public interface IAppConfiguration
     /// </summary>
     IReadOnlyList<ICalendarConfiguration> Calendars { get; }
 
-    public ICalendarNotificationRules? GetCalendarNotificationRules(string calendarSource)
+    ICalendarNotificationRules? GetCalendarNotificationRules(string calendarSource)
         => Calendars
             .FirstOrDefault(c => c.Name.Equals(calendarSource, StringComparison.OrdinalIgnoreCase))
             ?.NotificationRules;
@@ -66,6 +66,7 @@ public interface INotificationThresholds
     TimeSpan GentleMinutes { get; }
     TimeSpan ModerateMinutes { get; }
     TimeSpan UrgentMinutes { get; }
+    TimeSpan CriticalMinutes { get; }
 }
 
 /// <summary>

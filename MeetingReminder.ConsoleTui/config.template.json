@@ -1,10 +1,11 @@
 {
   "pollingInterval": "00:05:00",
-  "enabledNotificationStrategies": ["Beep", "SystemNotification"],
+  "enabledNotificationStrategies": [ "Beep", "SystemNotification" ],
   "thresholds": {
-    "gentleMinutes": "00:15:00",
-    "moderateMinutes": "00:10:00",
-    "urgentMinutes": "00:05:00"
+    "gentleMinutes": "00:10:00",
+    "moderateMinutes": "00:05:00",
+    "urgentMinutes": "00:02:00",
+    "criticalMinutes": "00:01:00"
   },
   "calendars": [
     {
