@@ -46,8 +46,9 @@ public class FetchCalendarEvents
         if (sourceList.Count == 0)
             return CalendarError.NoSourcesConfigured();
 
-        var fetchTasks = sourceList.Select(source =>
-            FetchFromSource(source, query, cancellationToken));
+        var fetchTasks = sourceList
+            .Select(source =>
+                FetchFromSource(source, query, cancellationToken));
 
         var results = await Task.WhenAll(fetchTasks);
 
@@ -90,7 +91,9 @@ public class FetchCalendarEvents
                 .Select(EnrichRawEvent)
                 .ToList()
                 .AsReadOnly();
-            return enrichedEvents.GroupBy(e => e.CalendarSource).ToDictionary(e => e.Key, e => (IReadOnlyList<MeetingEvent>)e.ToList());
+            return enrichedEvents
+                .GroupBy(e => e.CalendarSource)
+                .ToDictionary(e => e.Key, e => (IReadOnlyList<MeetingEvent>)e.ToList());
         }
 
         // All sources failed - return aggregate error
@@ -110,8 +113,8 @@ public class FetchCalendarEvents
         var linkResult = _linkExtractor.Extract(linkQuery);
         var link = linkResult.Match(l => (MeetingLink?)l, _ => null);
 
-        return new MeetingEvent(
-            id: raw.Id,
+        return MeetingEvent.Create(
+            id: new MeetingId(raw.CalendarSource, raw.Id),
             title: raw.Title,
             startTime: raw.StartTime,
             endTime: raw.EndTime,

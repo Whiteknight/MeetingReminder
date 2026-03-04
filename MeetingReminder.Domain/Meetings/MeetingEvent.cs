@@ -1,60 +1,22 @@
-using static MeetingReminder.Domain.Assert;
-
 namespace MeetingReminder.Domain.Meetings;
 
 /// <summary>
 /// Core domain entity representing a calendar meeting event.
 /// Contains all meeting information and domain logic for time calculations.
 /// </summary>
-public class MeetingEvent
+public sealed record MeetingEvent(
+    MeetingId Id,
+    string Title,
+    DateTime StartTime,
+    DateTime EndTime,
+    string Description,
+    string Location,
+    bool IsAllDay,
+    string CalendarSource,
+    MeetingLink? Link = null)
 {
-    /// <summary>
-    /// Unique identifier for the meeting event
-    /// </summary>
-    public string Id { get; init; }
-
-    /// <summary>
-    /// Title/subject of the meeting
-    /// </summary>
-    public string Title { get; init; }
-
-    /// <summary>
-    /// Meeting start date and time
-    /// </summary>
-    public DateTime StartTime { get; init; }
-
-    /// <summary>
-    /// Meeting end date and time
-    /// </summary>
-    public DateTime EndTime { get; init; }
-
-    /// <summary>
-    /// Meeting description/body text
-    /// </summary>
-    public string Description { get; init; }
-
-    /// <summary>
-    /// Meeting location (physical or virtual)
-    /// </summary>
-    public string Location { get; init; }
-
-    /// <summary>
-    /// Indicates if this is an all-day event
-    /// </summary>
-    public bool IsAllDay { get; init; }
-
-    /// <summary>
-    /// Name of the calendar source this event came from
-    /// </summary>
-    public string CalendarSource { get; init; }
-
-    /// <summary>
-    /// Extracted meeting link, if present
-    /// </summary>
-    public MeetingLink? Link { get; init; }
-
-    public MeetingEvent(
-        string id,
+    public static MeetingEvent Create(
+        MeetingId id,
         string title,
         DateTime startTime,
         DateTime endTime,
@@ -64,18 +26,11 @@ public class MeetingEvent
         string calendarSource,
         MeetingLink? link = null)
     {
-        Id = NotNullOrEmpty(id);
-        Title = NotNullOrEmpty(title);
-        StartTime = startTime;
-        EndTime = endTime;
-        Description = description ?? string.Empty;
-        Location = location ?? string.Empty;
-        IsAllDay = isAllDay;
-        CalendarSource = NotNullOrEmpty(calendarSource);
-        Link = link;
-
-        if (EndTime < StartTime)
+        ArgumentException.ThrowIfNullOrEmpty(title);
+        ArgumentException.ThrowIfNullOrEmpty(calendarSource);
+        if (endTime < startTime)
             throw new ArgumentException("End time must be after start time");
+        return new MeetingEvent(id, title, startTime, endTime, description ?? string.Empty, location ?? string.Empty, isAllDay, calendarSource, link);
     }
 
     /// <summary>

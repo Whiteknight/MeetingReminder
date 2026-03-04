@@ -58,12 +58,13 @@ public class UserInterfaceService : BackgroundService
 
         try
         {
-            var initial = _meetings.GetOrderedUpcomingEvents();
-            await AnsiConsole.Live(InterfaceBuilder.BuildDisplay(initial, _maxRows, _selectedMeetingIndex))
+            await AnsiConsole.Live(new Markup("[yellow]Loading...[/]"))
                 .AutoClear(true)
                 .Overflow(VerticalOverflow.Ellipsis)
                 .StartAsync(async ctx =>
                 {
+                    var initial = _meetings.GetOrderedUpcomingEvents();
+                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(initial, _maxRows, _selectedMeetingIndex));
                     while (!stoppingToken.IsCancellationRequested)
                     {
                         await _changes.WaitAsync(stoppingToken);

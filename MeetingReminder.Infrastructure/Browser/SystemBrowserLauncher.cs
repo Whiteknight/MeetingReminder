@@ -1,7 +1,7 @@
-using MeetingReminder.Domain;
-using MeetingReminder.Domain.Browsers;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using MeetingReminder.Domain;
+using MeetingReminder.Domain.Browsers;
 
 namespace MeetingReminder.Infrastructure.Browser;
 
@@ -33,13 +33,9 @@ public class SystemBrowserLauncher : IBrowserLauncher
     }
 
     private static bool IsValidUrl(string url)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-            return false;
-
-        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        => !string.IsNullOrWhiteSpace(url)
+            && Uri.TryCreate(url, UriKind.Absolute, out var uri)
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-    }
 
     private static void LaunchBrowser(string url)
     {
@@ -64,17 +60,18 @@ public class SystemBrowserLauncher : IBrowserLauncher
         throw new PlatformNotSupportedException("Browser launching is not supported on this platform");
     }
 
+    // TODO: Extract an IBrowserLauncher abstraction and move the implementations of these methods
+    // into platform-specific libraries.
+
     private static void LaunchOnWindows(string url)
     {
         // On Windows, use Process.Start with UseShellExecute = true
         // This opens the URL in the default browser
-        var startInfo = new ProcessStartInfo
+        Process.Start(new ProcessStartInfo
         {
             FileName = url,
             UseShellExecute = true
-        };
-
-        Process.Start(startInfo);
+        });
     }
 
     private static void LaunchOnLinux(string url)

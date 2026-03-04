@@ -18,9 +18,9 @@ public class MeetingEventTests
     {
         var start = startTime ?? DateTime.Now.AddHours(1);
         var end = endTime ?? start.AddHours(1);
-        
-        return new MeetingEvent(
-            id: "test-id",
+
+        return MeetingEvent.Create(
+            id: new MeetingId("TestCalendar", "test-id"),
             title: "Test Meeting",
             startTime: start,
             endTime: end,
@@ -39,8 +39,8 @@ public class MeetingEventTests
             var startTime = DateTime.Now.AddHours(2);
             var endTime = DateTime.Now.AddHours(1);
 
-            var act = () => new MeetingEvent(
-                id: "test-id",
+            var act = () => MeetingEvent.Create(
+                id: new MeetingId("TestCalendar", "test-id"),
                 title: "Test Meeting",
                 startTime: startTime,
                 endTime: endTime,
@@ -56,8 +56,8 @@ public class MeetingEventTests
         [Test]
         public void WhenIdIsEmpty_ThrowsArgumentException()
         {
-            var act = () => new MeetingEvent(
-                id: "",
+            var act = () => MeetingEvent.Create(
+                id: new MeetingId("TestCalendar", ""),
                 title: "Test Meeting",
                 startTime: DateTime.Now,
                 endTime: DateTime.Now.AddHours(1),
@@ -72,8 +72,8 @@ public class MeetingEventTests
         [Test]
         public void WhenTitleIsNull_ThrowsArgumentNullException()
         {
-            var act = () => new MeetingEvent(
-                id: "test-id",
+            var act = () => MeetingEvent.Create(
+                id: new MeetingId("TestCalendar", "test-id"),
                 title: null!,
                 startTime: DateTime.Now,
                 endTime: DateTime.Now.AddHours(1),

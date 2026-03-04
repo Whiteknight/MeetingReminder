@@ -10,7 +10,7 @@ namespace MeetingReminder.Application.UseCases;
 /// </summary>
 /// <param name="MeetingId">The ID of the meeting to acknowledge</param>
 /// <param name="OpenLink">Whether to open the meeting link in the browser</param>
-public readonly record struct AcknowledgeMeetingCommand(string MeetingId, bool OpenLink);
+public readonly record struct AcknowledgeMeetingCommand(MeetingId MeetingId, bool OpenLink);
 
 /// <summary>
 /// Handles meeting acknowledgement requests.
@@ -39,7 +39,7 @@ public class AcknowledgeMeeting
     /// <returns>A Result indicating success or failure with error details</returns>
     public async Task<Result<Unit, NotificationError>> Acknowledge(AcknowledgeMeetingCommand command)
     {
-        if (string.IsNullOrWhiteSpace(command.MeetingId))
+        if (!command.MeetingId.IsValid)
             return new NotificationError("Meeting ID is required");
 
         // Get meeting state from repository

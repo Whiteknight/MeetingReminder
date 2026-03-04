@@ -14,7 +14,7 @@ public interface IMeetingRepository
     /// </summary>
     /// <param name="id">The meeting ID to look up</param>
     /// <returns>A Result containing the MeetingState or an error if not found</returns>
-    Result<MeetingState, Error> GetById(string id);
+    Result<MeetingState, Error> GetById(MeetingId id);
 
     /// <summary>
     /// Gets all meeting states.
@@ -28,7 +28,7 @@ public interface IMeetingRepository
 
     Result<MeetingState, Error> Update(MeetingState state);
 
-    Result<string, Error> Remove(string id);
+    Result<MeetingId, Error> Remove(MeetingId id);
 
     IReadOnlyList<MeetingState> GetOrderedUpcomingEvents()
         => GetAll().Match(

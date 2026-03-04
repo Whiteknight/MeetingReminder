@@ -16,7 +16,7 @@ public class CalendarPollingService : ICalendarPollingService
 {
     private readonly FetchCalendarEvents _fetchCalendarEvents;
     private readonly TimeSpan _pollingInterval;
-    private readonly SemaphoreSlim _pollLock = new(1, 1);
+    private readonly SemaphoreSlim _pollLock;
     private readonly IMeetingRepository _meetings;
     private readonly ITimeProvider _timeProvider;
 
@@ -35,12 +35,13 @@ public class CalendarPollingService : ICalendarPollingService
         FetchCalendarEvents fetchCalendarEvents,
         IMeetingRepository meetings,
         IAppConfiguration configuration,
-        ITimeProvider? timeProvider = null)
+        ITimeProvider timeProvider)
     {
         _fetchCalendarEvents = NotNull(fetchCalendarEvents);
         _pollingInterval = configuration?.PollingInterval ?? TimeSpan.FromMinutes(5);
         _meetings = meetings;
-        _timeProvider = timeProvider ?? new SystemTimeProvider();
+        _timeProvider = timeProvider;
+        _pollLock = new SemaphoreSlim(1, 1);
 
         if (_pollingInterval < TimeSpan.FromMinutes(1))
             throw new ArgumentException("Polling interval must be at least 1 minute", nameof(configuration));
@@ -119,10 +120,9 @@ public class CalendarPollingService : ICalendarPollingService
             var now = _timeProvider.UtcNow;
             var query = new FetchCalendarEventsQuery(
                 StartTime: now,
-                EndTime: new DateTime(now.Year, now.Month, now.Day, 23, 59, 59));
+                EndTime: new DateTime(now.Year, now.Month, now.Day, 23, 59, 59, DateTimeKind.Local).ToUniversalTime());
 
             var result = await _fetchCalendarEvents.Fetch(query, cancellationToken);
-
             if (result.IsSuccess)
             {
                 var events = result.Match(e => e, _ => new Dictionary<string, IReadOnlyList<MeetingEvent>>());

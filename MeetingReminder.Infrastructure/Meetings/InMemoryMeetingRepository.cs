@@ -10,7 +10,7 @@ namespace MeetingReminder.Infrastructure.Meetings;
 /// </summary>
 public sealed class InMemoryMeetingRepository : IMeetingRepository
 {
-    private readonly ConcurrentDictionary<string, MeetingState> _meetings = new();
+    private readonly ConcurrentDictionary<MeetingId, MeetingState> _meetings = new();
     private readonly IChangeNotifier _notifier;
 
     public InMemoryMeetingRepository(IChangeNotifier notifier)
@@ -19,9 +19,9 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     }
 
     /// <inheritdoc />
-    public Result<MeetingState, Error> GetById(string id)
+    public Result<MeetingState, Error> GetById(MeetingId id)
     {
-        if (string.IsNullOrEmpty(id))
+        if (!id.IsValid)
             return new MeetingRepositoryError("Meeting ID cannot be null or empty");
 
         if (_meetings.TryGetValue(id, out var state))
@@ -60,7 +60,7 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     {
         if (state.Event is null)
             return new MeetingRepositoryError("Meeting state event cannot be null");
-        var result = _meetings.AddOrUpdate(state.Event.Id, state, (key, existing) => state);
+        var result = _meetings.AddOrUpdate(state.Event.Id, state, (_, _) => state);
         _notifier?.Set();
         return result;
     }
@@ -70,27 +70,13 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     /// </summary>
     /// <param name="id">The ID of the meeting to remove</param>
     /// <returns>A Result indicating success or failure</returns>
-    public Result<string, Error> Remove(string id)
+    public Result<MeetingId, Error> Remove(MeetingId id)
     {
-        if (string.IsNullOrEmpty(id))
+        if (!id.IsValid)
             return new MeetingRepositoryError("Meeting ID cannot be null or empty");
 
         _meetings.TryRemove(id, out _);
         _notifier?.Set();
         return id;
     }
-
-    /// <summary>
-    /// Clears all meeting states from the repository.
-    /// </summary>
-    public void Clear()
-    {
-        _meetings.Clear();
-        _notifier?.Set();
-    }
-
-    /// <summary>
-    /// Gets the count of meetings in the repository.
-    /// </summary>
-    public int Count => _meetings.Count;
 }

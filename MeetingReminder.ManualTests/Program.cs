@@ -4,8 +4,8 @@ using MeetingReminder.Infrastructure.Browser;
 using MeetingReminder.Infrastructure.Notifications;
 using MeetingReminder.Infrastructure.Windows.Notifications;
 
-var testMeeting = new MeetingEvent(
-    id: "test-123",
+var testMeeting = MeetingEvent.Create(
+    id: new MeetingId("manual-test", "test-123"),
     title: "Test Meeting",
     startTime: DateTime.Now.AddMinutes(5),
     endTime: DateTime.Now.AddMinutes(65),

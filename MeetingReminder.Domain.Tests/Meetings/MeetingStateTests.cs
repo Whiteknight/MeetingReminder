@@ -14,8 +14,8 @@ public class MeetingStateTests
 {
     private static MeetingEvent CreateTestMeeting()
     {
-        return new MeetingEvent(
-            id: "test-id",
+        return MeetingEvent.Create(
+            id: new MeetingId("TestCalendar", "test-id"),
             title: "Test Meeting",
             startTime: DateTime.Now.AddHours(1),
             endTime: DateTime.Now.AddHours(2),
