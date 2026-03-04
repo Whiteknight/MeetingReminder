@@ -110,8 +110,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddEnhancedTui(this IServiceCollection services)
     {
-        services.AddSingleton<MeetingReminderTuiService>();
-        services.AddHostedService(sp => sp.GetRequiredService<MeetingReminderTuiService>());
+        services.AddSingleton<UserInterfaceService>();
+        services.AddHostedService(sp => sp.GetRequiredService<UserInterfaceService>());
         return services;
     }
 

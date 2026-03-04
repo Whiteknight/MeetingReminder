@@ -12,7 +12,7 @@ namespace MeetingReminder.ConsoleTui.Services;
 /// <summary>
 /// Main TUI service. Aggregates events from the system and displays state in a rich, responsive UI.
 /// </summary>
-public class MeetingReminderTuiService : BackgroundService
+public class UserInterfaceService : BackgroundService
 {
     private const int _maxRows = 10;
 
@@ -22,11 +22,11 @@ public class MeetingReminderTuiService : BackgroundService
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ITimeProvider _timeProvider;
     private readonly IChangeNotifier _changes;
-    private readonly ILogger<MeetingReminderTuiService> _logger;
+    private readonly ILogger<UserInterfaceService> _logger;
 
     private int _selectedMeetingIndex = -1; // -1 = auto-select next upcoming meeting
 
-    public MeetingReminderTuiService(
+    public UserInterfaceService(
         IMeetingRepository meetings,
         IKeyboardInputHandler keyboardInputHandler,
         AcknowledgeMeeting acknowledgeMeeting,
@@ -34,7 +34,7 @@ public class MeetingReminderTuiService : BackgroundService
         IAppConfiguration configuration,
         ITimeProvider timeProvider,
         IChangeNotifier changes,
-        ILogger<MeetingReminderTuiService> logger)
+        ILogger<UserInterfaceService> logger)
     {
         _meetings = meetings;
         _keyboardInputHandler = keyboardInputHandler;
