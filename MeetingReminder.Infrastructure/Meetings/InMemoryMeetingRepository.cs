@@ -11,6 +11,12 @@ namespace MeetingReminder.Infrastructure.Meetings;
 public sealed class InMemoryMeetingRepository : IMeetingRepository
 {
     private readonly ConcurrentDictionary<string, MeetingState> _meetings = new();
+    private readonly IChangeNotifier _notifier;
+
+    public InMemoryMeetingRepository(IChangeNotifier notifier)
+    {
+        _notifier = notifier;
+    }
 
     /// <inheritdoc />
     public Result<MeetingState, Error> GetById(string id)
@@ -42,16 +48,21 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
         if (state.Event is null)
             return new MeetingRepositoryError("Meeting state event cannot be null");
 
-        return _meetings.TryAdd(state.Event.Id, state)
+        Result<MeetingState, Error> result = _meetings.TryAdd(state.Event.Id, state)
             ? state
             : new MeetingRepositoryError($"Meeting with ID '{state.Event.Id}' already exists");
+
+        _notifier?.Set();
+        return result;
     }
 
     public Result<MeetingState, Error> Update(MeetingState state)
     {
         if (state.Event is null)
             return new MeetingRepositoryError("Meeting state event cannot be null");
-        return _meetings.AddOrUpdate(state.Event.Id, state, (key, existing) => state);
+        var result = _meetings.AddOrUpdate(state.Event.Id, state, (key, existing) => state);
+        _notifier?.Set();
+        return result;
     }
 
     /// <summary>
@@ -65,13 +76,18 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
             return new MeetingRepositoryError("Meeting ID cannot be null or empty");
 
         _meetings.TryRemove(id, out _);
+        _notifier?.Set();
         return id;
     }
 
     /// <summary>
     /// Clears all meeting states from the repository.
     /// </summary>
-    public void Clear() => _meetings.Clear();
+    public void Clear()
+    {
+        _meetings.Clear();
+        _notifier?.Set();
+    }
 
     /// <summary>
     /// Gets the count of meetings in the repository.

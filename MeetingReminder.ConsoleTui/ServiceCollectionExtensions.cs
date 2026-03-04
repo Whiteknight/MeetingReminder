@@ -13,6 +13,7 @@ using MeetingReminder.Infrastructure.Configuration;
 using MeetingReminder.Infrastructure.ICal;
 using MeetingReminder.Infrastructure.Meetings;
 using MeetingReminder.Infrastructure.Notifications;
+using MeetingReminder.Infrastructure.Threading;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MeetingReminder.ConsoleTui;
@@ -120,6 +121,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddMeetingRepository(this IServiceCollection services)
     {
         services.AddSingleton<IMeetingRepository, InMemoryMeetingRepository>();
+        services.AddSingleton<IChangeNotifier, AsyncAutoResetEvent>();
         return services;
     }
 

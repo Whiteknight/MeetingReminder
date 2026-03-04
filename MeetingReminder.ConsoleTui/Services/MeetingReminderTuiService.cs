@@ -26,12 +26,15 @@ public class MeetingReminderTuiService : BackgroundService
     private const int _maxRows = 10;
 
     private static readonly string[] _spinnerFrames = ["|", "/", "-", "\\"];
-    private static readonly TimeSpan _tick = TimeSpan.FromMilliseconds(100);
+
+    //private static readonly TimeSpan _tick = TimeSpan.FromMilliseconds(1000);
     private readonly IMeetingRepository _meetings;
+
     private readonly IKeyboardInputHandler _keyboardInputHandler;
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ITimeProvider _timeProvider;
+    private readonly IChangeNotifier _changes;
     private readonly ILogger<MeetingReminderTuiService> _logger;
 
     private int _spinnerIndex;
@@ -44,6 +47,7 @@ public class MeetingReminderTuiService : BackgroundService
         IHostApplicationLifetime applicationLifetime,
         IAppConfiguration configuration,
         ITimeProvider timeProvider,
+        IChangeNotifier changes,
         ILogger<MeetingReminderTuiService> logger)
     {
         _meetings = meetings;
@@ -51,12 +55,20 @@ public class MeetingReminderTuiService : BackgroundService
         _acknowledgeMeeting = acknowledgeMeeting;
         _applicationLifetime = applicationLifetime;
         _timeProvider = timeProvider;
+        _changes = changes;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         Console.CursorVisible = false;
+
+        var keyThread = new Thread(() => KeyPressThreadFunction(stoppingToken))
+        {
+            IsBackground = true,
+            Name = "KeyboardReader"
+        };
+        keyThread.Start();
 
         try
         {
@@ -68,20 +80,38 @@ public class MeetingReminderTuiService : BackgroundService
                 {
                     while (!stoppingToken.IsCancellationRequested)
                     {
-                        await ProcessKeyboardInput(stoppingToken);
+                        await WaitForUpdateEvent(stoppingToken);
+                        while (Console.KeyAvailable)
+                            await ProcessKeyboardInput(stoppingToken);
 
                         _spinnerIndex = (_spinnerIndex + 1) % _spinnerFrames.Length;
 
                         var meetings = GetSortedEvents();
                         ctx.UpdateTarget(BuildDisplay(_spinnerIndex, meetings, _selectedMeetingIndex));
-                        await Task.Delay(_tick, stoppingToken);
                     }
                 });
         }
         finally
         {
             Console.CursorVisible = true;
+            keyThread.Join(1000);
         }
+    }
+
+    private void KeyPressThreadFunction(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            if (Console.KeyAvailable)
+                _changes.Set();
+        }
+    }
+
+    private async Task WaitForUpdateEvent(CancellationToken cancellationToken)
+    {
+        var timeout = Task.Delay(TimeSpan.FromMilliseconds(1000), cancellationToken);
+        var change = _changes.WaitAsync(cancellationToken);
+        await Task.WhenAny(timeout, change);
     }
 
     // -------------------------------------------------------------------------

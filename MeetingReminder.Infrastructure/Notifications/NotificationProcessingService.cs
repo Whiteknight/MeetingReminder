@@ -3,7 +3,6 @@ using MeetingReminder.Domain;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
-using MeetingReminder.Infrastructure.Meetings;
 using Microsoft.Extensions.Logging;
 using static MeetingReminder.Domain.Assert;
 
@@ -48,8 +47,8 @@ public class NotificationProcessingService : IDisposable
     {
         _calculateNotificationLevel = NotNull(calculateNotificationLevel);
         _config = NotNull(config);
-        _timeProvider = timeProvider ?? new SystemTimeProvider();
-        _meetings = meetingRepository ?? new InMemoryMeetingRepository();
+        _timeProvider = timeProvider;
+        _meetings = meetingRepository;
         _logger = logger;
 
         // Filter to only enabled and supported strategies (Requirements 9.2, 9.3)
