@@ -74,23 +74,24 @@ public class IcsCalendarSource : ICalendarSource
 
         try
         {
+            // TODO: Need to filter the source calendar events before mapping
+            // TODO: Need to expand reoccurring events
             var calendar = Calendar.Load(icalData);
             var events = new List<RawCalendarEvent>();
-
             if (calendar?.Events == null)
                 return events.AsReadOnly();
 
-            foreach (var calendarEvent in calendar.Events)
-            {
-                var rawEventResult = MapToRawCalendarEvent(calendarEvent);
-                if (rawEventResult.IsError)
-                    continue; // Skip malformed events but continue processing
+            var allEvents = calendar.GetOccurrences(new CalDateTime(startTime)).TakeWhileBefore(new CalDateTime(endTime))
+                .Select(MapToRawCalendarEvent)
+                .Where(Result => !Result.IsError)
+                .Select(Result => Result.GetValueOrDefault(null!))
+                .OrderByDescending(e => e.StartTime)
+                .ToList();
 
-                var rawEvent = rawEventResult.GetValueOrDefault(null!);
+            foreach (var rawEvent in allEvents)
+            {
                 if (IsEventInTimeRange(rawEvent, startTime, endTime))
-                {
                     events.Add(rawEvent);
-                }
             }
 
             return events.AsReadOnly();
@@ -101,16 +102,20 @@ public class IcsCalendarSource : ICalendarSource
         }
     }
 
-    private Result<RawCalendarEvent, CalendarError> MapToRawCalendarEvent(CalendarEvent calendarEvent)
+    private Result<RawCalendarEvent, CalendarError> MapToRawCalendarEvent(Occurrence occurrence)
     {
         try
         {
-            var startTime = GetDateTimeOrDefault(calendarEvent.DtStart, DateTime.UtcNow);
+            var startTime = GetDateTimeOrDefault(occurrence.Period.StartTime, DateTime.UtcNow);
+            var calendarEvent = occurrence.Source as CalendarEvent;
+            if (calendarEvent == null)
+                return CalendarError.MappingError(_sourceName, "Occurrence source is not a CalendarEvent");
+
             return new RawCalendarEvent(
                 Id: calendarEvent.Uid ?? Guid.NewGuid().ToString(),
                 Title: calendarEvent.Summary ?? "Untitled Event",
                 StartTime: startTime,
-                EndTime: GetDateTimeOrDefault(calendarEvent.DtEnd, startTime.AddHours(1)),
+                EndTime: GetDateTimeOrDefault(occurrence.Period.EndTime, startTime.AddHours(1)),
                 Description: calendarEvent.Description ?? string.Empty,
                 Location: calendarEvent.Location ?? string.Empty,
                 IsAllDay: calendarEvent.IsAllDay,
