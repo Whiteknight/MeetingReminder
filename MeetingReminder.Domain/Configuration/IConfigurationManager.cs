@@ -14,13 +14,6 @@ public interface IConfigurationManager
     Result<IAppConfiguration, ConfigurationError> LoadConfiguration();
 
     /// <summary>
-    /// Saves the application configuration.
-    /// </summary>
-    /// <param name="configuration">The configuration to save</param>
-    /// <returns>Result indicating success or a ConfigurationError</returns>
-    Result<Unit, ConfigurationError> SaveConfiguration(IAppConfiguration configuration);
-
-    /// <summary>
     /// Gets the path where configuration is stored.
     /// </summary>
     string ConfigurationPath { get; }

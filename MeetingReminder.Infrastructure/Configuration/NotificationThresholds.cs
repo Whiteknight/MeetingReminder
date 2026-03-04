@@ -23,7 +23,7 @@ public record NotificationThresholds(
     /// - Critical: At or past meeting start time (implicit)
     /// </summary>
     public static NotificationThresholds Default
-        => new(
+        => new NotificationThresholds(
             GentleMinutes: TimeSpan.FromMinutes(10),
             ModerateMinutes: TimeSpan.FromMinutes(5),
             UrgentMinutes: TimeSpan.FromMinutes(3),

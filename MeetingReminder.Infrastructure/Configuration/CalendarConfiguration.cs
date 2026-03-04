@@ -20,13 +20,14 @@ public record CalendarConfiguration(
     /// Gets the notification rules as the interface type.
     /// </summary>
     ICalendarNotificationRules ICalendarConfiguration.NotificationRules => NotificationRules;
+
     /// <summary>
     /// Creates a default Google Calendar configuration.
     /// </summary>
     /// <param name="name">Name for the calendar</param>
     /// <returns>A new CalendarConfiguration for Google Calendar</returns>
     public static CalendarConfiguration CreateGoogleCalendar(string name)
-        => new(
+        => new CalendarConfiguration(
             Name: name,
             Type: CalendarType.GoogleCalendar,
             SourceUrl: null,
@@ -39,7 +40,7 @@ public record CalendarConfiguration(
     /// <param name="url">URL to the iCal feed</param>
     /// <returns>A new CalendarConfiguration for iCal</returns>
     public static CalendarConfiguration CreateICal(string name, string url)
-        => new(
+        => new CalendarConfiguration(
             Name: name,
             Type: CalendarType.ICal,
             SourceUrl: url,
