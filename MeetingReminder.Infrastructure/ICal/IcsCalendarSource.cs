@@ -15,7 +15,6 @@ public class IcsCalendarSource : ICalendarSource
 {
     private readonly HttpClient _httpClient;
     private readonly string _sourceUrl;
-    private readonly string _sourceName;
 
     /// <summary>
     /// Creates a new ICS calendar source.
@@ -27,11 +26,11 @@ public class IcsCalendarSource : ICalendarSource
     {
         _httpClient = NotNull(httpClient);
         _sourceUrl = NotNull(sourceUrl);
-        _sourceName = NotNull(sourceName);
+        Name = NotNull(sourceName);
     }
 
     /// <inheritdoc />
-    public string Name => _sourceName;
+    public string Name { get; }
 
     /// <inheritdoc />
     public async Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(
@@ -47,20 +46,20 @@ public class IcsCalendarSource : ICalendarSource
         {
             var response = await _httpClient.GetAsync(_sourceUrl, cancellationToken);
             return !response.IsSuccessStatusCode
-                ? (Result<string, CalendarError>)CalendarError.HttpError(_sourceName, (int)response.StatusCode, response.ReasonPhrase)
+                ? (Result<string, CalendarError>)CalendarError.HttpError(Name, (int)response.StatusCode, response.ReasonPhrase)
                 : await response.Content.ReadAsStringAsync(cancellationToken);
         }
         catch (HttpRequestException ex)
         {
-            return CalendarError.NetworkError(_sourceName, ex.Message, ex);
+            return CalendarError.NetworkError(Name, ex.Message, ex);
         }
         catch (TaskCanceledException ex) when (ex.CancellationToken == cancellationToken)
         {
-            return CalendarError.RequestCancelled(_sourceName, ex);
+            return CalendarError.RequestCancelled(Name, ex);
         }
         catch (TaskCanceledException ex)
         {
-            return CalendarError.RequestTimedOut(_sourceName, ex);
+            return CalendarError.RequestTimedOut(Name, ex);
         }
     }
 
@@ -70,35 +69,26 @@ public class IcsCalendarSource : ICalendarSource
         DateTime endTime)
     {
         if (string.IsNullOrWhiteSpace(icalData))
-            return CalendarError.EmptyData(_sourceName);
+            return CalendarError.EmptyData(Name);
 
         try
         {
-            // TODO: Need to filter the source calendar events before mapping
-            // TODO: Need to expand reoccurring events
             var calendar = Calendar.Load(icalData);
-            var events = new List<RawCalendarEvent>();
             if (calendar?.Events == null)
-                return events.AsReadOnly();
+                return CalendarError.EmptyData(Name);
 
-            var allEvents = calendar.GetOccurrences(new CalDateTime(startTime)).TakeWhileBefore(new CalDateTime(endTime))
+            return calendar.GetOccurrences(new CalDateTime(startTime)).TakeWhileBefore(new CalDateTime(endTime))
                 .Select(MapToRawCalendarEvent)
                 .Where(Result => !Result.IsError)
                 .Select(Result => Result.GetValueOrDefault(null!))
                 .OrderByDescending(e => e.StartTime)
-                .ToList();
-
-            foreach (var rawEvent in allEvents)
-            {
-                if (IsEventInTimeRange(rawEvent, startTime, endTime))
-                    events.Add(rawEvent);
-            }
-
-            return events.AsReadOnly();
+                .Where(rawEvent => IsEventInTimeRange(rawEvent, startTime, endTime))
+                .ToList()
+                .AsReadOnly();
         }
         catch (Exception ex) when (IsParsingException(ex))
         {
-            return CalendarError.ParseError(_sourceName, ex.Message, ex);
+            return CalendarError.ParseError(Name, ex.Message, ex);
         }
     }
 
@@ -109,7 +99,7 @@ public class IcsCalendarSource : ICalendarSource
             var startTime = GetDateTimeOrDefault(occurrence.Period.StartTime, DateTime.UtcNow);
             var calendarEvent = occurrence.Source as CalendarEvent;
             if (calendarEvent == null)
-                return CalendarError.MappingError(_sourceName, "Occurrence source is not a CalendarEvent");
+                return CalendarError.MappingError(Name, "Occurrence source is not a CalendarEvent");
 
             return new RawCalendarEvent(
                 Id: calendarEvent.Uid ?? Guid.NewGuid().ToString(),
@@ -119,11 +109,11 @@ public class IcsCalendarSource : ICalendarSource
                 Description: calendarEvent.Description ?? string.Empty,
                 Location: calendarEvent.Location ?? string.Empty,
                 IsAllDay: calendarEvent.IsAllDay,
-                CalendarSource: _sourceName);
+                CalendarSource: Name);
         }
         catch (Exception ex)
         {
-            return CalendarError.MappingError(_sourceName, ex.Message, ex);
+            return CalendarError.MappingError(Name, ex.Message, ex);
         }
     }
 
