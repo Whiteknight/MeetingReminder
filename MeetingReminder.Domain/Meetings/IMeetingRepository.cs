@@ -29,4 +29,9 @@ public interface IMeetingRepository
     Result<MeetingState, Error> Update(MeetingState state);
 
     Result<string, Error> Remove(string id);
+
+    IReadOnlyList<MeetingState> GetOrderedUpcomingEvents()
+        => GetAll().Match(
+            events => events.OrderBy(e => e.Event.StartTime).ToList(),
+            _ => []);
 }
