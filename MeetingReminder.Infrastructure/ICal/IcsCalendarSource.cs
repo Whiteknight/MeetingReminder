@@ -115,7 +115,7 @@ public class IcsCalendarSource : ICalendarSource
                 Id: calendarEvent.Uid ?? Guid.NewGuid().ToString(),
                 Title: calendarEvent.Summary ?? "Untitled Event",
                 StartTime: startTime,
-                EndTime: GetDateTimeOrDefault(occurrence.Period.EndTime, startTime.AddHours(1)),
+                EndTime: GetDateTimeOrDefault(occurrence.Period.EffectiveEndTime ?? occurrence.Period.EndTime, startTime.AddHours(1)),
                 Description: calendarEvent.Description ?? string.Empty,
                 Location: calendarEvent.Location ?? string.Empty,
                 IsAllDay: calendarEvent.IsAllDay,
