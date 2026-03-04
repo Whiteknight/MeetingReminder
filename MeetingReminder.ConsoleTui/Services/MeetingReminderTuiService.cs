@@ -12,22 +12,13 @@ using Spectre.Console.Rendering;
 namespace MeetingReminder.ConsoleTui.Services;
 
 /// <summary>
-/// Main TUI service. Owns a single event loop that:
-///   1. Drains pending channel messages (calendar updates, notification updates)
-///   2. Reads one pending keypress, maps it to a TuiCommand, and handles it
-///   3. Renders the display once
-///
-/// All three steps happen on the same thread, so there is no contention
-/// between Spectre.Console's Live display and Console.ReadKey.
+/// Main TUI service. Aggregates events from the system and displays state in a rich, responsive UI.
 /// </summary>
 public class MeetingReminderTuiService : BackgroundService
 {
     // TODO: Separate out the UI-building and rendering from the other timer-based logic
     private const int _maxRows = 10;
 
-    private static readonly string[] _spinnerFrames = ["|", "/", "-", "\\"];
-
-    //private static readonly TimeSpan _tick = TimeSpan.FromMilliseconds(1000);
     private readonly IMeetingRepository _meetings;
 
     private readonly IKeyboardInputHandler _keyboardInputHandler;
@@ -37,7 +28,6 @@ public class MeetingReminderTuiService : BackgroundService
     private readonly IChangeNotifier _changes;
     private readonly ILogger<MeetingReminderTuiService> _logger;
 
-    private int _spinnerIndex;
     private int _selectedMeetingIndex = -1; // -1 = auto-select next upcoming meeting
 
     public MeetingReminderTuiService(
@@ -73,21 +63,19 @@ public class MeetingReminderTuiService : BackgroundService
         try
         {
             var initial = GetSortedEvents();
-            await AnsiConsole.Live(BuildDisplay(_spinnerIndex, initial, _selectedMeetingIndex))
+            await AnsiConsole.Live(BuildDisplay(initial, _selectedMeetingIndex))
                 .AutoClear(true)
                 .Overflow(VerticalOverflow.Ellipsis)
                 .StartAsync(async ctx =>
                 {
                     while (!stoppingToken.IsCancellationRequested)
                     {
-                        await WaitForUpdateEvent(stoppingToken);
+                        await _changes.WaitAsync(stoppingToken);
                         while (Console.KeyAvailable)
                             await ProcessKeyboardInput(stoppingToken);
 
-                        _spinnerIndex = (_spinnerIndex + 1) % _spinnerFrames.Length;
-
                         var meetings = GetSortedEvents();
-                        ctx.UpdateTarget(BuildDisplay(_spinnerIndex, meetings, _selectedMeetingIndex));
+                        ctx.UpdateTarget(BuildDisplay(meetings, _selectedMeetingIndex));
                     }
                 });
         }
@@ -105,13 +93,6 @@ public class MeetingReminderTuiService : BackgroundService
             if (Console.KeyAvailable)
                 _changes.Set();
         }
-    }
-
-    private async Task WaitForUpdateEvent(CancellationToken cancellationToken)
-    {
-        var timeout = Task.Delay(TimeSpan.FromMilliseconds(1000), cancellationToken);
-        var change = _changes.WaitAsync(cancellationToken);
-        await Task.WhenAny(timeout, change);
     }
 
     // -------------------------------------------------------------------------
@@ -231,23 +212,16 @@ public class MeetingReminderTuiService : BackgroundService
     // Rendering
     // -------------------------------------------------------------------------
 
-    private static IRenderable BuildDisplay(int tick, IReadOnlyList<MeetingState> meetings, int selectedMeetingIndex)
+    private static IRenderable BuildDisplay(IReadOnlyList<MeetingState> meetings, int selectedMeetingIndex)
     {
         return new Rows(
-            BuildHeader(tick),
             BuildMeetingsPanel(meetings, selectedMeetingIndex),
             BuildKeyboardHints());
     }
 
-    private static IRenderable BuildHeader(int tick)
-    {
-        var spinner = _spinnerFrames[tick % _spinnerFrames.Length];
-        return new Markup($"[grey]Meeting monitor[/] [cyan]{spinner}[/]");
-    }
-
     private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int selectedMeetingIndex) =>
         new Panel(BuildEventsTable(meetings, selectedMeetingIndex))
-            .Header("[yellow]Upcoming Meetings[/]")
+            .Header($"[yellow]{DateTime.UtcNow:ddd MMM dd} Meetings[/]")
             .Border(BoxBorder.Rounded)
             .BorderColor(Color.DarkSlateGray1)
             .Expand();
@@ -310,7 +284,7 @@ public class MeetingReminderTuiService : BackgroundService
     private static void AddEventRow(Table table, MeetingState meeting, bool isSelected)
     {
         var indicator = isSelected ? "[cyan bold]>[/]" : " ";
-        var start = meeting.Event.StartTime.ToLocalTime().ToString("ddd MMM dd HH:mm");
+        var start = meeting.Event.StartTime.ToLocalTime().ToString("HH:mm");
         var end = meeting.Event.EndTime.ToLocalTime().ToString("HH:mm");
         var title = Markup.Escape(TruncateString(meeting.Event.Title, 35));
         var link = meeting.Event.Link != null ? $"[green]{GetLinkTypeName(meeting.Event.Link)}[/]" : "[grey]-[/]";
@@ -363,7 +337,7 @@ public class MeetingReminderTuiService : BackgroundService
 
     private static IRenderable BuildKeyboardHints()
         => new Markup(
-            "[grey]Enter[/] Acknowledge  " +
+            "[grey]Enter/Spacebar[/] Acknowledge  " +
             "[grey]O[/] Open link  " +
             "[grey]Up/Down[/] Navigate  " +
             "[grey]Ctrl+C[/] Exit");

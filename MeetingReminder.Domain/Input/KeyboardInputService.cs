@@ -14,7 +14,7 @@ public class KeyboardInputService : IKeyboardInputHandler
         if (keyInfo.Key == ConsoleKey.DownArrow)
             return new InputCommand.NavigateDown();
 
-        if (keyInfo.Key == ConsoleKey.Enter)
+        if (keyInfo.Key == ConsoleKey.Enter || keyInfo.Key == ConsoleKey.Spacebar)
             return new InputCommand.Acknowledge();
 
         if (keyInfo.Key == ConsoleKey.O && !HasCtrl(keyInfo))
