@@ -150,8 +150,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddKeyboardInput(this IServiceCollection services)
     {
-        services.AddSingleton<KeyboardInputService>();
-        services.AddSingleton<IKeyboardInputHandler>(sp => sp.GetRequiredService<KeyboardInputService>());
+        services.AddSingleton<InputCommandMapper>();
         return services;
     }
 

@@ -17,7 +17,7 @@ public class UserInterfaceService : BackgroundService
     private const int _maxRows = 10;
 
     private readonly IMeetingRepository _meetings;
-    private readonly IKeyboardInputHandler _keyboardInputHandler;
+    private readonly InputCommandMapper _keyboardInputHandler;
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly ITimeProvider _timeProvider;
@@ -28,7 +28,7 @@ public class UserInterfaceService : BackgroundService
 
     public UserInterfaceService(
         IMeetingRepository meetings,
-        IKeyboardInputHandler keyboardInputHandler,
+        InputCommandMapper keyboardInputHandler,
         AcknowledgeMeeting acknowledgeMeeting,
         IHostApplicationLifetime applicationLifetime,
         IAppConfiguration configuration,

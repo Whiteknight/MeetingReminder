@@ -7,12 +7,12 @@ namespace MeetingReminder.ConsoleTui.Tests.Services;
 [TestFixture]
 public class KeyboardInputServiceTests
 {
-    private KeyboardInputService _service = null!;
+    private InputCommandMapper _service = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _service = new KeyboardInputService();
+        _service = new InputCommandMapper();
     }
 
     [Test]

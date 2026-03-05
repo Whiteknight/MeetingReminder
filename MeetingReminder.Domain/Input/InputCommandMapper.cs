@@ -4,7 +4,7 @@ namespace MeetingReminder.Domain.Input;
 /// Pure mapper: ConsoleKeyInfo → TuiCommand.
 /// Has no dependencies on TUI state, use cases, or application lifetime.
 /// </summary>
-public class KeyboardInputService : IKeyboardInputHandler
+public class InputCommandMapper
 {
     public InputCommand MapKey(ConsoleKeyInfo keyInfo)
     {
@@ -26,7 +26,6 @@ public class KeyboardInputService : IKeyboardInputHandler
         return new InputCommand.None();
     }
 
-    // TODO: Make extension method
     private static bool HasCtrl(ConsoleKeyInfo keyInfo)
         => keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control);
 }
