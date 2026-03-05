@@ -20,6 +20,7 @@ public class UserInterfaceService : BackgroundService
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly IChangeNotifier _changes;
+    private readonly ITimeProvider _time;
     private readonly ILogger<UserInterfaceService> _logger;
 
     private int _selectedMeetingIndex = -1; // -1 = auto-select next upcoming meeting
@@ -30,6 +31,7 @@ public class UserInterfaceService : BackgroundService
         AcknowledgeMeeting acknowledgeMeeting,
         IHostApplicationLifetime applicationLifetime,
         IChangeNotifier changes,
+        ITimeProvider time,
         ILogger<UserInterfaceService> logger)
     {
         _meetings = meetings;
@@ -37,6 +39,7 @@ public class UserInterfaceService : BackgroundService
         _acknowledgeMeeting = acknowledgeMeeting;
         _applicationLifetime = applicationLifetime;
         _changes = changes;
+        _time = time;
         _logger = logger;
     }
 
@@ -60,7 +63,7 @@ public class UserInterfaceService : BackgroundService
                 {
                     var meetings = _meetings.GetOrderedUpcomingEvents();
                     SetupSelectedIndex(meetings);
-                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex));
+                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now));
                     while (!stoppingToken.IsCancellationRequested)
                     {
                         var key = await _changes.WaitAsync(stoppingToken);
@@ -68,7 +71,7 @@ public class UserInterfaceService : BackgroundService
                         if (key.Key != ConsoleKey.None)
                             await ProcessKeyboardInput(key, meetings, stoppingToken);
                         SetupSelectedIndex(meetings);
-                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex));
+                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now));
                     }
                 });
         }

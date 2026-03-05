@@ -7,14 +7,14 @@ namespace MeetingReminder.ConsoleTui;
 
 public static class InterfaceBuilder
 {
-    public static IRenderable BuildDisplay(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex)
+    public static IRenderable BuildDisplay(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex, DateTime time)
         => new Rows(
-            BuildMeetingsPanel(meetings, maxRows, selectedMeetingIndex),
+            BuildMeetingsPanel(meetings, maxRows, selectedMeetingIndex, time),
             BuildKeyboardHints());
 
-    private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex)
+    private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex, DateTime time)
         => new Panel(BuildEventsTable(meetings, maxRows, selectedMeetingIndex))
-            .Header($"[yellow]{DateTime.UtcNow:ddd MMM dd} Meetings[/]")
+            .Header($"[yellow]{time:ddd MMM dd} Meetings[/]")
             .Border(BoxBorder.Rounded)
             .BorderColor(Color.DarkSlateGray1)
             .Expand();
