@@ -1,3 +1,5 @@
+using MeetingReminder.Domain.Calendars;
+
 namespace MeetingReminder.Domain.Meetings;
 
 /// <summary>
@@ -12,7 +14,7 @@ public sealed record MeetingEvent(
     string Description,
     string Location,
     bool IsAllDay,
-    string CalendarSource,
+    CalendarName Calendar,
     MeetingLink? Link = null)
 {
     public static MeetingEvent Create(
@@ -23,14 +25,17 @@ public sealed record MeetingEvent(
         string description,
         string location,
         bool isAllDay,
-        string calendarSource,
+        CalendarName calendar,
         MeetingLink? link = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(title);
-        ArgumentException.ThrowIfNullOrEmpty(calendarSource);
+        if (!id.IsValid)
+            throw new ArgumentException("Invalid meeting ID");
+        if (!calendar.IsValid)
+            throw new ArgumentException("Invalid calendar name");
         if (endTime < startTime)
             throw new ArgumentException("End time must be after start time");
-        return new MeetingEvent(id, title, startTime, endTime, description ?? string.Empty, location ?? string.Empty, isAllDay, calendarSource, link);
+        return new MeetingEvent(id, title, startTime, endTime, description ?? string.Empty, location ?? string.Empty, isAllDay, calendar, link);
     }
 
     /// <summary>

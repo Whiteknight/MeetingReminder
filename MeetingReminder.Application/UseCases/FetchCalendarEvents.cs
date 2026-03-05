@@ -37,7 +37,7 @@ public class FetchCalendarEvents
     /// Result containing aggregated and enriched meeting events from all successful sources,
     /// or a CalendarError if all sources failed.
     /// </returns>
-    public async Task<Result<IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>>, CalendarError>> Fetch(
+    public async Task<Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, CalendarError>> Fetch(
         FetchCalendarEventsQuery query,
         CancellationToken cancellationToken)
     {
@@ -70,7 +70,7 @@ public class FetchCalendarEvents
             error => new SourceFetchResult(source.Name, null, error));
     }
 
-    private Result<IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>>, CalendarError> AggregateAndEnrichResults(
+    private Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, CalendarError> AggregateAndEnrichResults(
         SourceFetchResult[] results)
     {
         var allRawEvents = new List<RawCalendarEvent>();
@@ -92,7 +92,7 @@ public class FetchCalendarEvents
                 .ToList()
                 .AsReadOnly();
             return enrichedEvents
-                .GroupBy(e => e.CalendarSource)
+                .GroupBy(e => e.Calendar)
                 .ToDictionary(e => e.Key, e => (IReadOnlyList<MeetingEvent>)e.ToList());
         }
 
@@ -114,19 +114,19 @@ public class FetchCalendarEvents
         var link = linkResult.Match(l => (MeetingLink?)l, _ => null);
 
         return MeetingEvent.Create(
-            id: new MeetingId(raw.CalendarSource, raw.Id),
+            id: new MeetingId(raw.Calendar, raw.Id),
             title: raw.Title,
             startTime: raw.StartTime,
             endTime: raw.EndTime,
             description: raw.Description,
             location: raw.Location,
             isAllDay: raw.IsAllDay,
-            calendarSource: raw.CalendarSource,
+            calendar: raw.Calendar,
             link: link);
     }
 
     private record SourceFetchResult(
-        string SourceName,
+        CalendarName SourceName,
         IReadOnlyList<RawCalendarEvent>? Events,
         CalendarError? Error);
 }

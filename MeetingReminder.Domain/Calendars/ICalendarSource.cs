@@ -23,5 +23,5 @@ public interface ICalendarSource
     /// <summary>
     /// Gets the name of this calendar source for identification and logging purposes.
     /// </summary>
-    string Name { get; }
+    CalendarName Name { get; }
 }

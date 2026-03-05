@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using MeetingReminder.Domain;
+using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Meetings;
 
 namespace MeetingReminder.Infrastructure.Meetings;
@@ -34,8 +35,8 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     public Result<IReadOnlyList<MeetingState>, Error> GetAll()
         => _meetings.Values.ToList().AsReadOnly();
 
-    public Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(string calendar)
-        => _meetings.Values.Where(ms => ms.Event.CalendarSource == calendar).ToList().AsReadOnly();
+    public Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(CalendarName calendar)
+        => _meetings.Values.Where(ms => ms.Event.Calendar == calendar).ToList().AsReadOnly();
 
     /// <summary>
     /// Adds or updates a meeting state in the repository.

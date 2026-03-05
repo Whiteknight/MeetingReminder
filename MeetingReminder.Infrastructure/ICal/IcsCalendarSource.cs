@@ -21,16 +21,16 @@ public class IcsCalendarSource : ICalendarSource
     /// </summary>
     /// <param name="httpClient">HTTP client for fetching iCal data</param>
     /// <param name="sourceUrl">URL of the iCal/ICS feed</param>
-    /// <param name="sourceName">Display name for this calendar source</param>
-    public IcsCalendarSource(HttpClient httpClient, string sourceUrl, string sourceName)
+    /// <param name="name">Display name for this calendar source</param>
+    public IcsCalendarSource(HttpClient httpClient, string sourceUrl, CalendarName name)
     {
         _httpClient = NotNull(httpClient);
         _sourceUrl = NotNull(sourceUrl);
-        Name = NotNull(sourceName);
+        Name = name.IsValid ? name : throw new ArgumentException("name must be valid", nameof(name));
     }
 
     /// <inheritdoc />
-    public string Name { get; }
+    public CalendarName Name { get; }
 
     /// <inheritdoc />
     public async Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(
@@ -109,7 +109,7 @@ public class IcsCalendarSource : ICalendarSource
                 Description: calendarEvent.Description ?? string.Empty,
                 Location: calendarEvent.Location ?? string.Empty,
                 IsAllDay: calendarEvent.IsAllDay,
-                CalendarSource: Name);
+                Calendar: Name);
         }
         catch (Exception ex)
         {

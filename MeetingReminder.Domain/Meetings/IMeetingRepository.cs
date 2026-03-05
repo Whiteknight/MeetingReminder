@@ -1,3 +1,5 @@
+using MeetingReminder.Domain.Calendars;
+
 namespace MeetingReminder.Domain.Meetings;
 
 /// <summary>
@@ -22,7 +24,7 @@ public interface IMeetingRepository
     /// <returns>A Result containing all meeting states or an error</returns>
     Result<IReadOnlyList<MeetingState>, Error> GetAll();
 
-    Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(string calendar);
+    Result<IReadOnlyList<MeetingState>, Error> GetAllByCalendar(CalendarName calendar);
 
     Result<MeetingState, Error> Add(MeetingState state);
 

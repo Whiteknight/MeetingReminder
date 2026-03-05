@@ -118,14 +118,15 @@ public class CalendarPollingService : ICalendarPollingService
         {
             // Use UTC time throughout - local time conversion happens only in UI
             var now = _timeProvider.UtcNow;
+            var localNow = now.ToLocalTime();
             var query = new FetchCalendarEventsQuery(
                 StartTime: now,
-                EndTime: new DateTime(now.Year, now.Month, now.Day, 23, 59, 59, DateTimeKind.Local).ToUniversalTime());
+                EndTime: new DateTime(localNow.Year, localNow.Month, localNow.Day, 23, 59, 59, DateTimeKind.Local).ToUniversalTime());
 
             var result = await _fetchCalendarEvents.Fetch(query, cancellationToken);
             if (result.IsSuccess)
             {
-                var events = result.Match(e => e, _ => new Dictionary<string, IReadOnlyList<MeetingEvent>>());
+                var events = result.Match(e => e, _ => new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>());
                 await ProcessFetchedEventsAsync(events, now, cancellationToken);
             }
             // On failure, we don't update the channel - the UI will continue showing
@@ -138,7 +139,7 @@ public class CalendarPollingService : ICalendarPollingService
     }
 
     private async Task ProcessFetchedEventsAsync(
-        IReadOnlyDictionary<string, IReadOnlyList<MeetingEvent>> events,
+        IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>> events,
         DateTime occurredAt,
         CancellationToken cancellationToken)
     {

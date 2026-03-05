@@ -1,3 +1,5 @@
+using MeetingReminder.Domain.Calendars;
+
 namespace MeetingReminder.Domain.Configuration;
 
 /// <summary>
@@ -45,9 +47,9 @@ public interface IAppConfiguration
     /// </summary>
     IReadOnlyList<ICalendarConfiguration> Calendars { get; }
 
-    ICalendarNotificationRules? GetCalendarNotificationRules(string calendarSource)
+    ICalendarNotificationRules? GetCalendarNotificationRules(CalendarName calendarSource)
         => Calendars
-            .FirstOrDefault(c => c.Name.Equals(calendarSource, StringComparison.OrdinalIgnoreCase))
+            .FirstOrDefault(c => calendarSource.Equals(c.Name, StringComparison.OrdinalIgnoreCase))
             ?.NotificationRules;
 }
 
@@ -57,8 +59,11 @@ public interface IAppConfiguration
 public interface INotificationThresholds
 {
     TimeSpan GentleMinutes { get; }
+
     TimeSpan ModerateMinutes { get; }
+
     TimeSpan UrgentMinutes { get; }
+
     TimeSpan CriticalMinutes { get; }
 }
 
@@ -68,7 +73,9 @@ public interface INotificationThresholds
 public interface ICalendarConfiguration
 {
     string Name { get; }
+
     string? SourceUrl { get; }
+
     ICalendarNotificationRules NotificationRules { get; }
 }
 
@@ -78,7 +85,9 @@ public interface ICalendarConfiguration
 public interface ICalendarNotificationRules
 {
     TimeSpan? NotificationWindowStart { get; }
+
     TimeSpan? NotificationWindowEnd { get; }
+
     int UrgencyMultiplier { get; }
 
     /// <summary>

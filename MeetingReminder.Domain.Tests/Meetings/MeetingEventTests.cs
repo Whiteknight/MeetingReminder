@@ -27,7 +27,7 @@ public class MeetingEventTests
             description: "Test description",
             location: "Test location",
             isAllDay: isAllDay,
-            calendarSource: "TestCalendar");
+            calendar: "TestCalendar");
     }
 
     [TestFixture]
@@ -47,7 +47,7 @@ public class MeetingEventTests
                 description: "Test",
                 location: "Test",
                 isAllDay: false,
-                calendarSource: "TestCalendar");
+                calendar: "TestCalendar");
 
             act.Should().Throw<ArgumentException>()
                 .WithMessage("*End time must be after start time*");
@@ -64,7 +64,7 @@ public class MeetingEventTests
                 description: "Test",
                 location: "Test",
                 isAllDay: false,
-                calendarSource: "TestCalendar");
+                calendar: "TestCalendar");
 
             act.Should().Throw<ArgumentException>();
         }
@@ -80,7 +80,7 @@ public class MeetingEventTests
                 description: "Test",
                 location: "Test",
                 isAllDay: false,
-                calendarSource: "TestCalendar");
+                calendar: "TestCalendar");
 
             act.Should().Throw<ArgumentNullException>();
         }

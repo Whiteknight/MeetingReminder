@@ -117,7 +117,7 @@ public class NotificationProcessingService : IDisposable
                 continue;
 
             // Get calendar-specific notification rules
-            var rules = _config.GetCalendarNotificationRules(state.Event.CalendarSource);
+            var rules = _config.GetCalendarNotificationRules(state.Event.Calendar);
             var newLevel = _calculateNotificationLevel.Calculate(new CalculateNotificationLevelQuery(
                 Meeting: state.Event,
                 CurrentTime: currentTime,

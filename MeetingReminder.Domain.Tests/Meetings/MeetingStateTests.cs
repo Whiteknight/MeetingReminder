@@ -22,7 +22,7 @@ public class MeetingStateTests
             description: "Test description",
             location: "Test location",
             isAllDay: false,
-            calendarSource: "TestCalendar");
+            calendar: "TestCalendar");
     }
 
     [TestFixture]

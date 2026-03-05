@@ -35,7 +35,7 @@ public class AcknowledgeMeetingTests
             description: "Test description",
             location: "Test location",
             isAllDay: false,
-            calendarSource: "test-calendar",
+            calendar: "test-calendar",
             link: link);
     }
 

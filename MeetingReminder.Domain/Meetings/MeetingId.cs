@@ -1,6 +1,13 @@
-﻿namespace MeetingReminder.Domain.Meetings;
+﻿using MeetingReminder.Domain.Calendars;
 
-public readonly record struct MeetingId(string Calendar, string Id)
+namespace MeetingReminder.Domain.Meetings;
+
+public readonly record struct MeetingId(CalendarName Calendar, string Id)
 {
-    public bool IsValid => !string.IsNullOrEmpty(Calendar) && !string.IsNullOrEmpty(Id);
+    public MeetingId(string calendar, string id)
+        : this(new CalendarName(calendar), id)
+    {
+    }
+
+    public bool IsValid => Calendar.IsValid && !string.IsNullOrEmpty(Id);
 }

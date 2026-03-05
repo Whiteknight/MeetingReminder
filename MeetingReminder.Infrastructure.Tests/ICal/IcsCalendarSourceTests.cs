@@ -80,7 +80,7 @@ END:VCALENDAR";
         events.Should().HaveCount(1);
         events[0].Title.Should().Be("Test Meeting");
         events[0].Description.Should().Contain("test meeting");
-        events[0].CalendarSource.Should().Be("Test Calendar");
+        events[0].Calendar.Should().Be("Test Calendar");
     }
 
 

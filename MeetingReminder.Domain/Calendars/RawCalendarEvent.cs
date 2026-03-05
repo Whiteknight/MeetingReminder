@@ -12,7 +12,7 @@ namespace MeetingReminder.Domain.Calendars;
 /// <param name="Description">Event description/body text</param>
 /// <param name="Location">Event location (physical or virtual)</param>
 /// <param name="IsAllDay">Whether this is an all-day event</param>
-/// <param name="CalendarSource">Name of the calendar source this event came from</param>
+/// <param name="Calendar">Name of the calendar source this event came from</param>
 public record RawCalendarEvent(
     string Id,
     string Title,
@@ -21,4 +21,4 @@ public record RawCalendarEvent(
     string Description,
     string Location,
     bool IsAllDay,
-    string CalendarSource);
+    CalendarName Calendar);

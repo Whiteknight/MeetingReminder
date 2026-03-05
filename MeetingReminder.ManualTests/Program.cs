@@ -12,7 +12,7 @@ var testMeeting = MeetingEvent.Create(
     description: "This is a test meeting for notification testing",
     location: "Conference Room A",
     isAllDay: false,
-    calendarSource: "manual-test");
+    calendar: "manual-test");
 
 var results = new List<TestResult>();
 
