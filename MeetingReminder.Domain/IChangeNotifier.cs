@@ -2,7 +2,9 @@
 
 public interface IChangeNotifier
 {
-    Task WaitAsync(CancellationToken cancellationToken);
+    Task<ConsoleKeyInfo> WaitAsync(CancellationToken cancellationToken);
 
     void Set();
+
+    void Set(ConsoleKeyInfo key);
 }

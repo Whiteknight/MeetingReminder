@@ -53,7 +53,7 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
             ? state
             : new MeetingRepositoryError($"Meeting with ID '{state.Event.Id}' already exists");
 
-        _notifier?.Set();
+        _notifier.Set();
         return result;
     }
 
@@ -62,7 +62,7 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
         if (state.Event is null)
             return new MeetingRepositoryError("Meeting state event cannot be null");
         var result = _meetings.AddOrUpdate(state.Event.Id, state, (_, _) => state);
-        _notifier?.Set();
+        _notifier.Set();
         return result;
     }
 
@@ -77,7 +77,7 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
             return new MeetingRepositoryError("Meeting ID cannot be null or empty");
 
         _meetings.TryRemove(id, out _);
-        _notifier?.Set();
+        _notifier.Set();
         return id;
     }
 }

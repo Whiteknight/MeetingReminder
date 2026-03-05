@@ -58,15 +58,18 @@ public class UserInterfaceService : BackgroundService
                 .Overflow(VerticalOverflow.Ellipsis)
                 .StartAsync(async ctx =>
                 {
-                    do
+                    var meetings = _meetings.GetOrderedUpcomingEvents();
+                    SetupSelectedIndex(meetings);
+                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex));
+                    while (!stoppingToken.IsCancellationRequested)
                     {
-                        var meetings = _meetings.GetOrderedUpcomingEvents();
+                        var key = await _changes.WaitAsync(stoppingToken);
+                        meetings = _meetings.GetOrderedUpcomingEvents();
+                        if (key.Key != ConsoleKey.None)
+                            await ProcessKeyboardInput(key, meetings, stoppingToken);
                         SetupSelectedIndex(meetings);
                         ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex));
-                        await _changes.WaitAsync(stoppingToken);
-                        while (Console.KeyAvailable)
-                            await ProcessKeyboardInput(stoppingToken, meetings);
-                    } while (!stoppingToken.IsCancellationRequested);
+                    }
                 });
         }
         finally
@@ -80,8 +83,8 @@ public class UserInterfaceService : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (Console.KeyAvailable)
-                _changes.Set();
+            var key = Console.ReadKey(intercept: true);
+            _changes.Set(key);
         }
     }
 
@@ -89,12 +92,8 @@ public class UserInterfaceService : BackgroundService
     // Input Handling
     // -------------------------------------------------------------------------
 
-    private async Task ProcessKeyboardInput(CancellationToken stoppingToken, IReadOnlyList<MeetingState> meetings)
+    private async Task ProcessKeyboardInput(ConsoleKeyInfo key, IReadOnlyList<MeetingState> meetings, CancellationToken stoppingToken)
     {
-        if (!Console.KeyAvailable)
-            return;
-
-        var key = Console.ReadKey(intercept: true);
         switch (_keyboardInputHandler.MapKey(key))
         {
             case InputCommand.NavigateUp:
@@ -123,10 +122,8 @@ public class UserInterfaceService : BackgroundService
     private async Task HandleAcknowledgeAsync(IReadOnlyList<MeetingState> meetings, bool openLink, CancellationToken cancellationToken)
     {
         var selectedMeeting = GetSelectedMeeting(meetings);
-        if (selectedMeeting.Event is null)
-            return;
-
-        await _acknowledgeMeeting.Acknowledge(new AcknowledgeMeetingCommand(selectedMeeting.Event.Id, openLink));
+        if (selectedMeeting.Event is not null)
+            await _acknowledgeMeeting.Acknowledge(new AcknowledgeMeetingCommand(selectedMeeting.Event.Id, openLink));
     }
 
     private MeetingState GetSelectedMeeting(IReadOnlyList<MeetingState> meetings)
