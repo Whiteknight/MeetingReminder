@@ -99,6 +99,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICalendarPollingService, CalendarPollingService>();
 
         services.AddHostedService<CalendarPollingHostedService>();
+        services.AddSingleton<ConsolidateIncomingMeetings>();
 
         return services;
     }
@@ -160,6 +161,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddNotificationUseCases(this IServiceCollection services)
     {
         services.AddSingleton<CalculateNotificationLevel>();
+        services.AddSingleton<NotifyUser>();
+        services.AddSingleton<UpdateAllNotificationLevels>();
         return services;
     }
 

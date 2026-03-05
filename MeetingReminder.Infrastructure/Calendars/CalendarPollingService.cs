@@ -17,7 +17,7 @@ public class CalendarPollingService : ICalendarPollingService
     private readonly FetchCalendarEvents _fetchCalendarEvents;
     private readonly TimeSpan _pollingInterval;
     private readonly SemaphoreSlim _pollLock;
-    private readonly IMeetingRepository _meetings;
+    private readonly ConsolidateIncomingMeetings _consolidateIncomingMeetings;
     private readonly ITimeProvider _timeProvider;
 
     private Timer? _timer;
@@ -28,27 +28,23 @@ public class CalendarPollingService : ICalendarPollingService
     /// Creates a new instance of the CalendarPollingService.
     /// </summary>
     /// <param name="fetchCalendarEvents">Use case for fetching calendar events</param>
-    /// <param name="meetings"></param>
     /// <param name="configuration">Application configuration containing polling interval</param>
     /// <param name="timeProvider">Optional time provider for testing (defaults to system time)</param>
     public CalendarPollingService(
         FetchCalendarEvents fetchCalendarEvents,
-        IMeetingRepository meetings,
+        ConsolidateIncomingMeetings consolidateIncomingMeetings,
         IAppConfiguration configuration,
         ITimeProvider timeProvider)
     {
         _fetchCalendarEvents = NotNull(fetchCalendarEvents);
         _pollingInterval = configuration?.PollingInterval ?? TimeSpan.FromMinutes(5);
-        _meetings = meetings;
+        _consolidateIncomingMeetings = NotNull(consolidateIncomingMeetings);
         _timeProvider = timeProvider;
         _pollLock = new SemaphoreSlim(1, 1);
 
         if (_pollingInterval < TimeSpan.FromMinutes(1))
             throw new ArgumentException("Polling interval must be at least 1 minute", nameof(configuration));
     }
-
-    /// <inheritdoc />
-    public bool IsRunning => _timer is not null && !_disposed;
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken = default)
@@ -101,13 +97,6 @@ public class CalendarPollingService : ICalendarPollingService
         _pollLock.Release();
     }
 
-    /// <inheritdoc />
-    public async Task PollNowAsync(CancellationToken cancellationToken = default)
-    {
-        ThrowIfDisposed();
-        await PollInternalAsync(cancellationToken);
-    }
-
     private async Task PollInternalAsync(CancellationToken cancellationToken)
     {
         // Try to acquire lock without waiting - skip if previous poll still running
@@ -125,45 +114,13 @@ public class CalendarPollingService : ICalendarPollingService
 
             var result = await _fetchCalendarEvents.Fetch(query, cancellationToken);
             if (result.IsSuccess)
-            {
-                var events = result.Match(e => e, _ => new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>());
-                await ProcessFetchedEventsAsync(events, now, cancellationToken);
-            }
+                await _consolidateIncomingMeetings.Consolidate(result.GetValueOrDefault(new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>()), cancellationToken);
             // On failure, we don't update the channel - the UI will continue showing
             // the last known state. Errors are logged elsewhere.
         }
         finally
         {
             _pollLock.Release();
-        }
-    }
-
-    private async Task ProcessFetchedEventsAsync(
-        IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>> events,
-        DateTime occurredAt,
-        CancellationToken cancellationToken)
-    {
-        foreach (var (calendarSource, incomingMeetings) in events)
-        {
-            var existingResult = _meetings.GetAllByCalendar(calendarSource);
-            if (!existingResult.IsSuccess)
-                continue;
-            var existing = existingResult.GetValueOrDefault([]).ToDictionary(e => e.Event.Id);
-
-            foreach (var incoming in incomingMeetings)
-            {
-                if (!existing.ContainsKey(incoming.Id))
-                {
-                    _meetings.Add(MeetingState.New(incoming));
-                    continue;
-                }
-
-                _meetings.Update(existing[incoming.Id].UpdateEvent(incoming));
-                existing.Remove(incoming.Id);
-            }
-
-            foreach (var remaining in existing.Values)
-                _meetings.Remove(remaining.Event.Id);
         }
     }
 

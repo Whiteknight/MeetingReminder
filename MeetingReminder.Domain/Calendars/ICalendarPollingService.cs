@@ -16,15 +16,4 @@ public interface ICalendarPollingService : IDisposable
     /// Stops the polling service gracefully.
     /// </summary>
     Task StopAsync();
-
-    /// <summary>
-    /// Forces an immediate poll of all calendar sources.
-    /// </summary>
-    /// <param name="cancellationToken">Token to cancel the poll operation</param>
-    Task PollNowAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets whether the service is currently running.
-    /// </summary>
-    bool IsRunning { get; }
 }

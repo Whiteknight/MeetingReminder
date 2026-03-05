@@ -88,8 +88,7 @@ public class FetchCalendarEvents
         if (allRawEvents.Count > 0)
         {
             var enrichedEvents = allRawEvents
-                .Select(EnrichRawEvent)
-                .ToList()
+                .ConvertAll(EnrichRawEvent)
                 .AsReadOnly();
             return enrichedEvents
                 .GroupBy(e => e.Calendar)
@@ -110,8 +109,8 @@ public class FetchCalendarEvents
     private MeetingEvent EnrichRawEvent(RawCalendarEvent raw)
     {
         var linkQuery = new ExtractMeetingLinkQuery(raw.Description, raw.Location);
-        var linkResult = _linkExtractor.Extract(linkQuery);
-        var link = linkResult.Match(l => (MeetingLink?)l, _ => null);
+        var link = _linkExtractor.Extract(linkQuery)
+            .Match(l => (MeetingLink?)l, _ => null);
 
         return MeetingEvent.Create(
             id: new MeetingId(raw.Calendar, raw.Id),
