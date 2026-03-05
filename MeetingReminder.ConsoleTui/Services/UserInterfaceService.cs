@@ -1,6 +1,5 @@
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
-using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Input;
 using MeetingReminder.Domain.Meetings;
 using Microsoft.Extensions.Hosting;
@@ -20,7 +19,6 @@ public class UserInterfaceService : BackgroundService
     private readonly InputCommandMapper _keyboardInputHandler;
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
     private readonly IHostApplicationLifetime _applicationLifetime;
-    private readonly ITimeProvider _timeProvider;
     private readonly IChangeNotifier _changes;
     private readonly ILogger<UserInterfaceService> _logger;
 
@@ -31,8 +29,6 @@ public class UserInterfaceService : BackgroundService
         InputCommandMapper keyboardInputHandler,
         AcknowledgeMeeting acknowledgeMeeting,
         IHostApplicationLifetime applicationLifetime,
-        IAppConfiguration configuration,
-        ITimeProvider timeProvider,
         IChangeNotifier changes,
         ILogger<UserInterfaceService> logger)
     {
@@ -40,7 +36,6 @@ public class UserInterfaceService : BackgroundService
         _keyboardInputHandler = keyboardInputHandler;
         _acknowledgeMeeting = acknowledgeMeeting;
         _applicationLifetime = applicationLifetime;
-        _timeProvider = timeProvider;
         _changes = changes;
         _logger = logger;
     }
@@ -59,21 +54,19 @@ public class UserInterfaceService : BackgroundService
         try
         {
             await AnsiConsole.Live(new Markup("[yellow]Loading...[/]"))
-                .AutoClear(true)
+                .AutoClear(false)
                 .Overflow(VerticalOverflow.Ellipsis)
                 .StartAsync(async ctx =>
                 {
-                    var initial = _meetings.GetOrderedUpcomingEvents();
-                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(initial, _maxRows, _selectedMeetingIndex));
-                    while (!stoppingToken.IsCancellationRequested)
+                    do
                     {
+                        var meetings = _meetings.GetOrderedUpcomingEvents();
+                        SetupSelectedIndex(meetings);
+                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex));
                         await _changes.WaitAsync(stoppingToken);
                         while (Console.KeyAvailable)
-                            await ProcessKeyboardInput(stoppingToken);
-
-                        var meetings = _meetings.GetOrderedUpcomingEvents();
-                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex));
-                    }
+                            await ProcessKeyboardInput(stoppingToken, meetings);
+                    } while (!stoppingToken.IsCancellationRequested);
                 });
         }
         finally
@@ -96,7 +89,7 @@ public class UserInterfaceService : BackgroundService
     // Input Handling
     // -------------------------------------------------------------------------
 
-    private async Task ProcessKeyboardInput(CancellationToken stoppingToken)
+    private async Task ProcessKeyboardInput(CancellationToken stoppingToken, IReadOnlyList<MeetingState> meetings)
     {
         if (!Console.KeyAvailable)
             return;
@@ -105,19 +98,19 @@ public class UserInterfaceService : BackgroundService
         switch (_keyboardInputHandler.MapKey(key))
         {
             case InputCommand.NavigateUp:
-                NavigateUp();
+                NavigateUp(meetings);
                 break;
 
             case InputCommand.NavigateDown:
-                NavigateDown();
+                NavigateDown(meetings);
                 break;
 
             case InputCommand.Acknowledge:
-                await HandleAcknowledgeAsync(openLink: false, stoppingToken);
+                await HandleAcknowledgeAsync(meetings, openLink: false, stoppingToken);
                 break;
 
             case InputCommand.OpenAndAcknowledge:
-                await HandleAcknowledgeAsync(openLink: true, stoppingToken);
+                await HandleAcknowledgeAsync(meetings, openLink: true, stoppingToken);
                 break;
 
             case InputCommand.Quit:
@@ -127,56 +120,59 @@ public class UserInterfaceService : BackgroundService
         }
     }
 
-    private async Task HandleAcknowledgeAsync(bool openLink, CancellationToken cancellationToken)
+    private async Task HandleAcknowledgeAsync(IReadOnlyList<MeetingState> meetings, bool openLink, CancellationToken cancellationToken)
     {
-        var selectedMeeting = GetSelectedMeeting();
+        var selectedMeeting = GetSelectedMeeting(meetings);
         if (selectedMeeting.Event is null)
             return;
 
         await _acknowledgeMeeting.Acknowledge(new AcknowledgeMeetingCommand(selectedMeeting.Event.Id, openLink));
     }
 
-    public MeetingState GetSelectedMeeting()
+    private MeetingState GetSelectedMeeting(IReadOnlyList<MeetingState> meetings)
     {
-        var sorted = _meetings.GetOrderedUpcomingEvents();
-        if (sorted.Count == 0)
+        if (meetings.Count == 0)
             return default;
 
-        if (_selectedMeetingIndex >= 0 && _selectedMeetingIndex < sorted.Count)
-            return sorted[_selectedMeetingIndex];
+        if (_selectedMeetingIndex >= 0 && _selectedMeetingIndex < meetings.Count)
+            return meetings[_selectedMeetingIndex];
 
-        return GetNextUpcomingMeeting(sorted);
+        return default;
     }
 
-    public void NavigateUp()
+    private void SetupSelectedIndex(IReadOnlyList<MeetingState> meetings)
     {
-        var sorted = _meetings.GetOrderedUpcomingEvents();
-        if (sorted.Count == 0)
+        if (_selectedMeetingIndex >= 0 && _selectedMeetingIndex < meetings.Count)
+            return;
+        if (_selectedMeetingIndex < 0)
+        {
+            _selectedMeetingIndex = 0;
+            return;
+        }
+        if (_selectedMeetingIndex >= meetings.Count)
+        {
+            _selectedMeetingIndex = meetings.Count - 1;
+            return;
+        }
+    }
+
+    private void NavigateUp(IReadOnlyList<MeetingState> meetings)
+    {
+        if (meetings.Count == 0)
             return;
 
-        if (_selectedMeetingIndex < 0)
-            _selectedMeetingIndex = 0;
-        else if (_selectedMeetingIndex > 0)
+        if (_selectedMeetingIndex > 0)
             _selectedMeetingIndex--;
     }
 
-    public void NavigateDown()
+    private void NavigateDown(IReadOnlyList<MeetingState> meetings)
     {
-        var sorted = _meetings.GetOrderedUpcomingEvents();
-        if (sorted.Count == 0)
+        if (meetings.Count == 0)
             return;
 
-        var maxIndex = Math.Min(sorted.Count, _maxRows) - 1;
+        var maxIndex = Math.Min(meetings.Count, _maxRows) - 1;
 
-        if (_selectedMeetingIndex < 0)
-            _selectedMeetingIndex = 0;
-        else if (_selectedMeetingIndex < maxIndex)
+        if (_selectedMeetingIndex < maxIndex)
             _selectedMeetingIndex++;
-    }
-
-    private MeetingState GetNextUpcomingMeeting(IReadOnlyList<MeetingState> sorted)
-    {
-        var now = _timeProvider.UtcNow;
-        return sorted.FirstOrDefault(e => e.Event.StartTime > now);
     }
 }

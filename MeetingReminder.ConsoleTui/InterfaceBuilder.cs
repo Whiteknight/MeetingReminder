@@ -3,7 +3,7 @@ using MeetingReminder.Domain.Notifications;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
-namespace MeetingReminder.ConsoleTui.Services;
+namespace MeetingReminder.ConsoleTui;
 
 public static class InterfaceBuilder
 {
