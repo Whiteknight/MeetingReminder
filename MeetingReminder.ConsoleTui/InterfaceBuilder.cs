@@ -27,7 +27,7 @@ public static class InterfaceBuilder
             PadBlankRows(table, maxRows);
             return new Rows(
                 table,
-                new Markup("[yellow]No upcoming meetings in the next 7 days.[/]"));
+                new Markup("[yellow]No upcoming meetings.[/]"));
         }
 
         if (selectedMeetingIndex < 0)
@@ -124,9 +124,12 @@ public static class InterfaceBuilder
         };
 
     private static string TruncateString(string value, int maxLength)
-        => string.IsNullOrEmpty(value)
-            ? string.Empty
-            : value.Length > maxLength ? value[..(maxLength - 3)] + "..." : value;
+        => value?.Trim() switch
+        {
+            null => string.Empty,
+            "" => string.Empty,
+            string v => v.Length > maxLength ? v[..(maxLength - 3)] + "..." : v
+        };
 
     private static IRenderable BuildKeyboardHints()
         => new Markup(

@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Infrastructure.ICal;
 using Moq;
@@ -80,7 +81,7 @@ END:VCALENDAR";
         events.Should().HaveCount(1);
         events[0].Title.Should().Be("Test Meeting");
         events[0].Description.Should().Contain("test meeting");
-        events[0].Calendar.Should().Be("Test Calendar");
+        events[0].Calendar.Should().Be(new CalendarName("Test Calendar"));
     }
 
 
@@ -140,7 +141,7 @@ END:VCALENDAR";
         result.IsError.Should().BeTrue();
         var error = result.Match(_ => null!, e => e);
         error.Message.Should().Contain("Network error");
-        error.CalendarSource.Should().Be("Test Calendar");
+        error.CalendarSource.Should().Be(new CalendarName("Test Calendar"));
     }
 
     [Test]
@@ -242,7 +243,7 @@ END:VCALENDAR";
         var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "My Calendar");
 
         // Act & Assert
-        source.Name.Should().Be("My Calendar");
+        source.Name.Should().Be(new CalendarName("My Calendar"));
     }
 
     [Test]

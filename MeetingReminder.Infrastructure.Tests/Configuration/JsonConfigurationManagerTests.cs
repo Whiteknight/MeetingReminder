@@ -55,7 +55,7 @@ public sealed class JsonConfigurationManagerTests
                 config.EnabledNotificationStrategies.Should().Contain("SystemNotification");
                 config.Thresholds.GentleMinutes.Should().Be(TimeSpan.FromMinutes(10));
                 config.Thresholds.ModerateMinutes.Should().Be(TimeSpan.FromMinutes(5));
-                config.Thresholds.UrgentMinutes.Should().Be(TimeSpan.FromMinutes(1));
+                config.Thresholds.UrgentMinutes.Should().Be(TimeSpan.FromMinutes(3));
                 config.Calendars.Should().BeEmpty();
             },
             error => throw new AssertionException($"Expected success but got error: {error.Message}"));
