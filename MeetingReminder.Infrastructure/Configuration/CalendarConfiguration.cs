@@ -17,6 +17,17 @@ public record CalendarConfiguration(
     CalendarNotificationRules NotificationRules) : ICalendarConfiguration
 {
     /// <summary>
+    /// Parameterless constructor for YAML deserialization.
+    /// </summary>
+    public CalendarConfiguration() : this(
+        string.Empty,
+        CalendarType.ICal,
+        null,
+        CalendarNotificationRules.Default)
+    {
+    }
+
+    /// <summary>
     /// Gets the notification rules as the interface type.
     /// </summary>
     ICalendarNotificationRules ICalendarConfiguration.NotificationRules => NotificationRules;

@@ -26,19 +26,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="config.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config.template.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="config.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="Resources\config.template.yaml" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <AssemblyName>nag</AssemblyName>
+    <PublishAot>true</PublishAot>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows10.0.17763.0</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Linux'))">net10.0</TargetFrameworks>
     <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows')) And !$([MSBuild]::IsOSPlatform('Linux'))">net10.0</TargetFrameworks>

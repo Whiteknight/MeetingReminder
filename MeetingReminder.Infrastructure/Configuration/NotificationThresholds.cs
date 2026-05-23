@@ -16,6 +16,18 @@ public record NotificationThresholds(
     TimeSpan CriticalMinutes) : INotificationThresholds
 {
     /// <summary>
+    /// Parameterless constructor for YAML deserialization.
+    /// </summary>
+    public NotificationThresholds()
+        : this(
+            TimeSpan.FromMinutes(10),
+            TimeSpan.FromMinutes(5),
+            TimeSpan.FromMinutes(3),
+            TimeSpan.FromMinutes(1))
+    {
+    }
+
+    /// <summary>
     /// Default notification thresholds:
     /// - Gentle: 10 minutes before meeting
     /// - Moderate: 5 minutes before meeting

@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Infrastructure.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,12 +12,12 @@ public static class Program
     public static async Task Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
-        Console.Title = "Reminders";
+        Console.Title = "nag";
 
-        var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
+        var pathResolver = new ConfigPathResolver();
 
         // Validate configuration before starting the host
-        var configValidationResult = ValidateConfiguration(configPath);
+        var configValidationResult = ValidateConfiguration(pathResolver);
         if (!configValidationResult)
         {
             AnsiConsole.MarkupLine("[grey]Press any key to exit...[/]");
@@ -36,7 +37,7 @@ public static class Program
 
         try
         {
-            var host = CreateHostBuilder(args, configPath).Build();
+            var host = CreateHostBuilder(args, pathResolver).Build();
             await host.RunAsync(cts.Token);
         }
         catch (OperationCanceledException)
@@ -58,27 +59,31 @@ public static class Program
 
     /// <summary>
     /// Validates the configuration file before starting the application.
-    /// Logs any validation errors to the console.
+    /// Handles first-run setup (config creation + exit signal).
     /// </summary>
-    /// <param name="configPath">Path to the configuration file</param>
-    /// <returns>True if configuration is valid or defaults are used, false if fatal errors</returns>
-    private static bool ValidateConfiguration(string configPath)
+    private static bool ValidateConfiguration(ConfigPathResolver pathResolver)
     {
-        var configManager = new JsonConfigurationManager(configPath);
+        var configManager = new YamlConfigurationManager(pathResolver);
         var result = configManager.LoadConfiguration();
 
         return result.Match(
             _ => true,
             error =>
             {
+                if (error is FirstRunConfigurationError)
+                {
+                    AnsiConsole.MarkupLine($"[green]First run detected.[/]");
+                    AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(error.Message)}[/]");
+                    AnsiConsole.MarkupLine($"[grey]A template file with examples has also been created at:[/]");
+                    AnsiConsole.MarkupLine($"[grey]{Markup.Escape(pathResolver.GetTemplateFilePath())}[/]");
+                    return false;
+                }
+
                 AnsiConsole.MarkupLine($"[red]Configuration error:[/] {Markup.Escape(error.Message)}");
 
                 if (error.ConfigKey != null)
-                {
                     AnsiConsole.MarkupLine($"[grey]Config path: {Markup.Escape(error.ConfigKey)}[/]");
-                }
 
-                // For validation errors, show details but allow startup with defaults
                 if (error.Message.StartsWith("Configuration validation failed"))
                 {
                     AnsiConsole.MarkupLine("[yellow]Using default configuration instead.[/]");
@@ -89,42 +94,26 @@ public static class Program
             });
     }
 
-    private static IHostBuilder CreateHostBuilder(string[] args, string configPath)
+    private static IHostBuilder CreateHostBuilder(string[] args, ConfigPathResolver pathResolver)
     {
         return Host.CreateDefaultBuilder(args)
             .ConfigureLogging(logging =>
             {
                 logging.ClearProviders();
-                // Suppress console logging to avoid interfering with TUI
                 logging.SetMinimumLevel(LogLevel.Warning);
             })
             .ConfigureServices((context, services) =>
             {
-                // Core infrastructure (time provider, HTTP client)
                 services.AddCoreInfrastructure();
-
-                // Configuration management
-                services.AddConfiguration(configPath);
-
-                // Repositories and external services
+                services.AddConfiguration(pathResolver);
                 services.AddMeetingRepository();
                 services.AddBrowserLauncher();
                 services.AddCalendarSources();
-
-                // Use cases
                 services.AddCalendarUseCases();
                 services.AddNotificationUseCases();
                 services.AddAcknowledgementUseCases();
-
-                // Background services (run on separate threads via IHostedService)
-                // CalendarPollingService: Polls calendars at configured interval
-                // NotificationProcessingService: Processes notifications every 10 seconds
                 services.AddCalendarPolling();
                 services.AddNotificationProcessing();
-
-                // TUI services (BackgroundService pattern - runs on thread pool)
-                // MeetingReminderTuiService: Renders the three-panel TUI
-                // KeyboardInputService: Handles keyboard input
                 services.AddEnhancedTui();
                 services.AddKeyboardInput();
             });

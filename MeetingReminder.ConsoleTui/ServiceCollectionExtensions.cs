@@ -34,14 +34,15 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds configuration services and loads configuration from the specified path.
+    /// Adds configuration services using the specified path resolver.
     /// </summary>
     public static IServiceCollection AddConfiguration(
         this IServiceCollection services,
-        string configPath)
+        IConfigPathResolver pathResolver)
     {
+        services.AddSingleton<IConfigPathResolver>(pathResolver);
         services.AddSingleton<IConfigurationManager>(
-            _ => new JsonConfigurationManager(configPath));
+            _ => new YamlConfigurationManager(pathResolver));
 
         services.AddSingleton<IAppConfiguration>(sp =>
         {

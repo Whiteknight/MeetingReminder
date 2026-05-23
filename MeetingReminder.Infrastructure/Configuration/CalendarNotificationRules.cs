@@ -15,12 +15,21 @@ public record CalendarNotificationRules(
     int UrgencyMultiplier) : ICalendarNotificationRules
 {
     /// <summary>
+    /// Parameterless constructor for YAML deserialization.
+    /// </summary>
+    public CalendarNotificationRules()
+        : this(null, null, 1)
+    {
+    }
+
+    /// <summary>
     /// Default rules with no time window restrictions and standard urgency.
     /// </summary>
-    public static CalendarNotificationRules Default => new(
-        NotificationWindowStart: null,
-        NotificationWindowEnd: null,
-        UrgencyMultiplier: 1);
+    public static CalendarNotificationRules Default
+        => new(
+            NotificationWindowStart: null,
+            NotificationWindowEnd: null,
+            UrgencyMultiplier: 1);
 
     /// <summary>
     /// Determines if the given time falls within the configured notification window.
@@ -63,11 +72,11 @@ public record CalendarNotificationRules(
             return false;
 
         // Time of day values must be valid (0-24 hours)
-        if (NotificationWindowStart is not null && 
+        if (NotificationWindowStart is not null &&
             (NotificationWindowStart.Value < TimeSpan.Zero || NotificationWindowStart.Value >= TimeSpan.FromHours(24)))
             return false;
 
-        if (NotificationWindowEnd is not null && 
+        if (NotificationWindowEnd is not null &&
             (NotificationWindowEnd.Value < TimeSpan.Zero || NotificationWindowEnd.Value >= TimeSpan.FromHours(24)))
             return false;
 

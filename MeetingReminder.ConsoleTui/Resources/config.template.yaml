@@ -1,0 +1,41 @@
+# nag - Configuration Template
+# Copy settings from this file into config.yaml and adjust as needed.
+# Lines starting with # are comments and are ignored.
+
+# How often to poll calendar sources for updates.
+# Minimum: 00:01:00 (1 minute), Maximum: 01:00:00 (1 hour)
+# pollingInterval: "00:05:00"
+
+# Notification strategies to enable. Available: Beep, SystemNotification
+# enabledNotificationStrategies:
+#   - Beep
+#   - SystemNotification
+
+# Notification escalation thresholds.
+# Each value is a TimeSpan indicating how far before the meeting start
+# that notification level activates.
+# thresholds:
+#   gentleMinutes: "00:10:00"
+#   moderateMinutes: "00:05:00"
+#   urgentMinutes: "00:03:00"
+#   criticalMinutes: "00:01:00"
+
+# Calendar sources to poll.
+# Each calendar needs a name, type, and type-specific configuration.
+# calendars:
+#   # iCal example - polls an .ics URL
+#   - name: "Work Calendar"
+#     type: ICal
+#     sourceUrl: "https://calendar.google.com/calendar/ical/your-email/basic.ics"
+#     notificationRules:
+#       notificationWindowStart: "08:00:00"
+#       notificationWindowEnd: "18:00:00"
+#       urgencyMultiplier: 1
+#
+#   # Google Calendar API example (more efficient for Google calendars)
+#   - name: "Personal Google"
+#     type: GoogleCalendar
+#     calendarId: "your-email@gmail.com"
+#     credentialPath: "google-credentials.json"
+#     notificationRules:
+#       urgencyMultiplier: 1

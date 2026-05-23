@@ -18,6 +18,17 @@ public record AppConfiguration(
     List<CalendarConfiguration> Calendars) : IAppConfiguration
 {
     /// <summary>
+    /// Parameterless constructor for YAML deserialization.
+    /// </summary>
+    public AppConfiguration() : this(
+        TimeSpan.FromMinutes(5),
+        ["Beep", "SystemNotification"],
+        NotificationThresholds.Default,
+        [])
+    {
+    }
+
+    /// <summary>
     /// Gets the enabled notification strategies as a read-only list.
     /// </summary>
     IReadOnlyList<string> IAppConfiguration.EnabledNotificationStrategies => EnabledNotificationStrategies;
@@ -30,8 +41,9 @@ public record AppConfiguration(
     /// <summary>
     /// Gets the calendars as a read-only list of the interface type.
     /// </summary>
-    IReadOnlyList<ICalendarConfiguration> IAppConfiguration.Calendars =>
-        Calendars.Cast<ICalendarConfiguration>().ToList();
+    IReadOnlyList<ICalendarConfiguration> IAppConfiguration.Calendars
+        => Calendars.Cast<ICalendarConfiguration>().ToList();
+
     /// <summary>
     /// Default configuration with sensible defaults:
     /// - 5 minute polling interval
@@ -39,11 +51,12 @@ public record AppConfiguration(
     /// - Standard notification thresholds (10/5/1 minutes)
     /// - No calendars configured (user must add)
     /// </summary>
-    public static AppConfiguration Default => new(
-        PollingInterval: TimeSpan.FromMinutes(5),
-        EnabledNotificationStrategies: ["Beep", "SystemNotification"],
-        Thresholds: NotificationThresholds.Default,
-        Calendars: []);
+    public static AppConfiguration Default
+        => new(
+            PollingInterval: TimeSpan.FromMinutes(5),
+            EnabledNotificationStrategies: ["Beep", "SystemNotification"],
+            Thresholds: NotificationThresholds.Default,
+            Calendars: []);
 
     /// <summary>
     /// Validates the entire configuration.
@@ -83,10 +96,9 @@ public record AppConfiguration(
         if (duplicateNames.Count > 0)
             errors.Add($"Duplicate calendar names found: {string.Join(", ", duplicateNames)}");
 
-        if (errors.Count > 0)
-            return Result.FromError<AppConfiguration, IReadOnlyList<string>>(errors);
-
-        return this;
+        return errors.Count == 0
+            ? this
+            : errors;
     }
 
     /// <summary>

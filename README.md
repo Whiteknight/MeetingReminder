@@ -1,6 +1,6 @@
-# Meeting Reminder
+# nag 
 
-A C# application that provides aggressive, escalating notifications for calendar meetings following Clean Architecture principles. Designed to support multiple frontends (TUI, GUI, etc.).
+`nag` is a C# application which provides aggressive, escalating notifications for calendar meetings and other events. It is designed to help resolve problems of "sorry I'm late to the meeting", or "I didn't check the website so I didn't know I had work due".
 
 ## Project Structure
 
