@@ -56,6 +56,36 @@ DESCRIPTION:This is an all day event
 END:VEVENT
 END:VCALENDAR";
 
+    // Two occurrences of the same recurring event on different days.
+    // Both share the same UID - the distinguishing factor is the start time.
+    private const string RecurringEventICalData = @"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:recurring-event@example.com
+DTSTART:20260220T100000Z
+DTEND:20260220T110000Z
+RRULE:FREQ=DAILY;COUNT=2
+SUMMARY:Daily Standup
+DESCRIPTION:Daily standup meeting
+END:VEVENT
+END:VCALENDAR";
+
+    // A single event that has been rescheduled: the RECURRENCE-ID holds the original
+    // time but DTSTART reflects the new time. We expect the instance ID to use DTSTART
+    // so that the rescheduled occurrence gets a different ID from the original slot.
+    private const string RescheduledEventICalData = @"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:rescheduled-event@example.com
+DTSTART:20260220T140000Z
+DTEND:20260220T150000Z
+SUMMARY:Rescheduled Meeting
+DESCRIPTION:This meeting was moved
+END:VEVENT
+END:VCALENDAR";
+
     private const string MalformedICalData = @"This is not valid iCal data";
 
     private const string EmptyCalendarICalData = @"BEGIN:VCALENDAR
@@ -263,6 +293,66 @@ END:VCALENDAR";
         result.IsSuccess.Should().BeTrue();
         var events = result.Match(e => e, _ => null!);
         events.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task FetchEvents_EventIdIncludesUidAndStartTime()
+    {
+        // The ID must be UID_<starttime> so that rescheduled and recurring occurrences
+        // each produce a unique ID rather than inheriting a stale acknowledgement state.
+        var httpClient = CreateMockHttpClient(ValidICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 2, 28, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().HaveCount(1);
+        events[0].Id.Should().Be("test-event-1@example.com_20260220T100000Z");
+    }
+
+    [Test]
+    public async Task FetchEvents_RecurringEventOccurrencesHaveDistinctIds()
+    {
+        // Each daily occurrence shares a UID but must get a different ID because the
+        // start times differ. Without this, acknowledging Monday's standup would cause
+        // Tuesday's standup to start the day already acknowledged.
+        var httpClient = CreateMockHttpClient(RecurringEventICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 2, 28, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().HaveCount(2);
+
+        var ids = events.Select(e => e.Id).ToList();
+        ids.Should().OnlyHaveUniqueItems();
+        ids.Should().Contain("recurring-event@example.com_20260220T100000Z");
+        ids.Should().Contain("recurring-event@example.com_20260221T100000Z");
+    }
+
+    [Test]
+    public async Task FetchEvents_RescheduledEventIdReflectsNewStartTime()
+    {
+        // A rescheduled meeting has a different DTSTART from its original slot.
+        // The instance ID must use DTSTART (the actual occurrence time) so that
+        // acknowledging the original slot does not suppress alerts for the new time.
+        var httpClient = CreateMockHttpClient(RescheduledEventICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 2, 28, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().HaveCount(1);
+        events[0].Id.Should().Be("rescheduled-event@example.com_20260220T140000Z");
     }
 
     private static HttpClient CreateMockHttpClient(string responseContent, HttpStatusCode statusCode)

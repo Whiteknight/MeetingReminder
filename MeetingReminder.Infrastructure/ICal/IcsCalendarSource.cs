@@ -101,8 +101,14 @@ public class IcsCalendarSource : ICalendarSource
             if (calendarEvent == null)
                 return CalendarError.MappingError(Name, "Occurrence source is not a CalendarEvent");
 
+            // Use UID+StartTime as the instance ID so that:
+            // - Recurring event occurrences on different days each get a unique ID
+            // - A rescheduled meeting gets a new ID, ensuring stale acknowledgements don't carry over
+            var uid = calendarEvent.Uid ?? Guid.NewGuid().ToString();
+            var instanceId = $"{uid}_{startTime:yyyyMMddTHHmmssZ}";
+
             return new RawCalendarEvent(
-                Id: calendarEvent.Uid ?? Guid.NewGuid().ToString(),
+                Id: instanceId,
                 Title: calendarEvent.Summary ?? "Untitled Event",
                 StartTime: startTime,
                 EndTime: GetDateTimeOrDefault(occurrence.Period.EffectiveEndTime ?? occurrence.Period.EndTime, startTime.AddHours(1)),
