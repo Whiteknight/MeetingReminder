@@ -76,6 +76,7 @@ public static class InterfaceBuilder
 
     private static void AddEventRow(Table table, MeetingState meeting, bool isSelected)
     {
+        // TODO: We should be able to make all the colors here configurable
         var indicator = isSelected ? "[cyan bold]>[/]" : " ";
         var start = meeting.Event.StartTime.ToLocalTime().ToString("HH:mm");
         var end = meeting.Event.EndTime.ToLocalTime().ToString("HH:mm");
@@ -85,13 +86,21 @@ public static class InterfaceBuilder
 
         if (meeting.CurrentLevel >= NotificationLevel.Urgent)
         {
-            title = $"[red]{title}[/]";
-            start = $"[red]{start}[/]";
+            var color = isSelected ? "red on gray11" : "red";
+            title = $"[{color}]{title}[/]";
+            start = $"[{color}]{start}[/]";
         }
         else if (meeting.CurrentLevel >= NotificationLevel.Moderate)
         {
-            title = $"[yellow]{title}[/]";
-            start = $"[yellow]{start}[/]";
+            var color = isSelected ? "yellow on gray11" : "yellow";
+            title = $"[{color}]{title}[/]";
+            start = $"[{color}]{start}[/]";
+        }
+        else
+        {
+            var color = isSelected ? "white on gray11" : "white";
+            title = $"[{color}]{title}[/]";
+            start = $"[{color}]{start}[/]";
         }
 
         table.AddRow(indicator, start, end, title, link, status);
@@ -132,6 +141,7 @@ public static class InterfaceBuilder
         };
 
     private static IRenderable BuildKeyboardHints()
+        // TODO: Should have a way to un-ack a meeting that was prematurely acknowledged
         => new Markup(
             "[grey]Enter/Spacebar[/] Acknowledge  " +
             "[grey]O[/] Open link  " +
