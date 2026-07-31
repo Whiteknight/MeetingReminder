@@ -1,6 +1,6 @@
+using System.Text.RegularExpressions;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Meetings;
-using System.Text.RegularExpressions;
 
 namespace MeetingReminder.Application.UseCases;
 
@@ -16,14 +16,14 @@ public readonly record struct ExtractMeetingLinkQuery(string? Description, strin
 /// Prioritizes video conferencing links (Google Meet, Zoom, Teams) over generic URLs.
 /// Uses source-generated regex for optimal performance.
 /// </summary>
-public partial class ExtractMeetingLink
+public static partial class ExtractMeetingLink
 {
     /// <summary>
     /// Extracts a meeting link from the provided query.
     /// </summary>
     /// <param name="query">The query containing description and location text</param>
     /// <returns>A Result containing the extracted MeetingLink or an error if none found</returns>
-    public Result<MeetingLink, Error> Extract(ExtractMeetingLinkQuery query)
+    public static Result<MeetingLink, Error> Extract(ExtractMeetingLinkQuery query)
     {
         var searchText = CombineSearchText(query.Description, query.Location);
 

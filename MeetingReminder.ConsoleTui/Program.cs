@@ -102,7 +102,7 @@ public static class Program
                 logging.ClearProviders();
                 logging.SetMinimumLevel(LogLevel.Warning);
             })
-            .ConfigureServices((context, services) =>
+            .ConfigureServices((_, services) =>
             {
                 services.AddCoreInfrastructure();
                 services.AddConfiguration(pathResolver);

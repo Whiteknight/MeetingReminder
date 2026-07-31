@@ -46,10 +46,10 @@ public class AcknowledgeMeeting
         return _meetingRepository.GetById(command.MeetingId)
             .MapError(e => new NotificationError(e.Message))
             .Bind(meeting => TryLaunchBrowser(command, meeting))
-            .Bind(meeting => UpdateMeeting(command, meeting));
+            .Bind(UpdateMeeting);
     }
 
-    private Result<MeetingState, NotificationError> UpdateMeeting(AcknowledgeMeetingCommand command, MeetingState meetingState)
+    private Result<MeetingState, NotificationError> UpdateMeeting(MeetingState meetingState)
         => _meetingRepository.Update(meetingState.Acknowledge(_time.UtcNow))
             .MapError(e => new NotificationError(e.Message));
 

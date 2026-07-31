@@ -8,14 +8,6 @@ namespace MeetingReminder.Application.Tests.UseCases;
 [TestFixture]
 public class ExtractMeetingLinkTests
 {
-    private ExtractMeetingLink _extractMeetingLink = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _extractMeetingLink = new ExtractMeetingLink();
-    }
-
     [TestFixture]
     public sealed class NoLinksTests : ExtractMeetingLinkTests
     {
@@ -24,7 +16,7 @@ public class ExtractMeetingLinkTests
         {
             var query = new ExtractMeetingLinkQuery(null, null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsError.Should().BeTrue();
         }
@@ -34,7 +26,7 @@ public class ExtractMeetingLinkTests
         {
             var query = new ExtractMeetingLinkQuery(string.Empty, string.Empty);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsError.Should().BeTrue();
         }
@@ -44,7 +36,7 @@ public class ExtractMeetingLinkTests
         {
             var query = new ExtractMeetingLinkQuery("   ", "   ");
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsError.Should().BeTrue();
         }
@@ -56,7 +48,7 @@ public class ExtractMeetingLinkTests
                 "Please join us for the weekly standup meeting",
                 "Conference Room A");
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsError.Should().BeTrue();
         }
@@ -72,7 +64,7 @@ public class ExtractMeetingLinkTests
                 "Join at https://meet.google.com/abc-defg-hij",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             var link = result.Match(l => l, _ => null!);
@@ -88,7 +80,7 @@ public class ExtractMeetingLinkTests
                 null,
                 "https://meet.google.com/xyz-abcd-efg");
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<GoogleMeetLink>();
@@ -105,7 +97,7 @@ public class ExtractMeetingLinkTests
                 "Join Zoom Meeting: https://zoom.us/j/123456789",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             var link = result.Match(l => l, _ => null!);
@@ -121,7 +113,7 @@ public class ExtractMeetingLinkTests
                 "https://us02web.zoom.us/j/987654321?pwd=abc123",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<ZoomLink>();
@@ -134,7 +126,7 @@ public class ExtractMeetingLinkTests
                 "https://zoom.us/my/johndoe",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<ZoomLink>();
@@ -151,7 +143,7 @@ public class ExtractMeetingLinkTests
                 "Join Teams: https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc123",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             var link = result.Match(l => l, _ => null!);
@@ -170,7 +162,7 @@ public class ExtractMeetingLinkTests
                 "Meeting info at https://example.com/meeting/123",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             var link = result.Match(l => l, _ => null!);
@@ -186,7 +178,7 @@ public class ExtractMeetingLinkTests
                 "http://intranet.company.com/room/42",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<OtherLink>();
@@ -203,7 +195,7 @@ public class ExtractMeetingLinkTests
                 "Agenda: https://docs.google.com/doc/123 Meeting: https://meet.google.com/abc-defg-hij",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<GoogleMeetLink>();
@@ -216,7 +208,7 @@ public class ExtractMeetingLinkTests
                 "Notes: https://notion.so/meeting-notes Join: https://zoom.us/j/123456789",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<ZoomLink>();
@@ -229,7 +221,7 @@ public class ExtractMeetingLinkTests
                 "https://sharepoint.com/doc https://teams.microsoft.com/l/meetup-join/abc",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<MicrosoftTeamsLink>();
@@ -246,7 +238,7 @@ public class ExtractMeetingLinkTests
                 "Zoom: https://zoom.us/j/123 Meet: https://meet.google.com/abc-defg-hij",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<GoogleMeetLink>();
@@ -263,7 +255,7 @@ public class ExtractMeetingLinkTests
                 "https://meet.google.com/invalid",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<OtherLink>();
@@ -276,7 +268,7 @@ public class ExtractMeetingLinkTests
                 "Visit https://example.com/meeting.",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l.Url, _ => string.Empty).Should().Be("https://example.com/meeting");
@@ -289,7 +281,7 @@ public class ExtractMeetingLinkTests
                 "Meeting link (https://example.com/room)",
                 null);
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l.Url, _ => string.Empty).Should().Be("https://example.com/room");
@@ -306,7 +298,7 @@ public class ExtractMeetingLinkTests
                 "Weekly team sync",
                 "https://meet.google.com/abc-defg-hij");
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<GoogleMeetLink>();
@@ -319,7 +311,7 @@ public class ExtractMeetingLinkTests
                 "Agenda at https://docs.google.com/doc/123",
                 "https://zoom.us/j/987654321");
 
-            var result = _extractMeetingLink.Extract(query);
+            var result = ExtractMeetingLink.Extract(query);
 
             result.IsSuccess.Should().BeTrue();
             result.Match(l => l, _ => null!).Should().BeOfType<ZoomLink>();

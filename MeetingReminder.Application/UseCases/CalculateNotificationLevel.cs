@@ -32,20 +32,15 @@ public class CalculateNotificationLevel
     /// <returns>Result containing the calculated NotificationLevel or an error</returns>
     public NotificationLevel Calculate(CalculateNotificationLevelQuery query)
     {
-        var meeting = query.Meeting;
-        var currentTime = query.CurrentTime;
-        var thresholds = query.Thresholds;
-        var rules = query.Rules;
-
         // All-day events never escalate (Requirements 8.6, 8.7)
-        if (meeting.IsAllDay)
+        if (query.Meeting.IsAllDay)
             return NotificationLevel.None;
 
         // Check if current time is within notification window (Requirements 10.8, 10.9)
-        if (!IsWithinNotificationWindow(rules, currentTime))
+        if (!IsWithinNotificationWindow(query.Rules, query.CurrentTime))
             return NotificationLevel.None;
 
-        return CalculateLevelFromTimeUntilStart(meeting, currentTime, thresholds);
+        return CalculateLevelFromTimeUntilStart(query.Meeting, query.CurrentTime, query.Thresholds);
     }
 
     // If no rules configured, notifications are always active

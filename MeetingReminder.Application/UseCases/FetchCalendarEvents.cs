@@ -20,13 +20,10 @@ public readonly record struct FetchCalendarEventsQuery(DateTime StartTime, DateT
 public class FetchCalendarEvents
 {
     private readonly IEnumerable<ICalendarSource> _sources;
-    private readonly ExtractMeetingLink _linkExtractor;
 
     public FetchCalendarEvents(IEnumerable<ICalendarSource> sources)
     {
         _sources = sources ?? throw new ArgumentNullException(nameof(sources));
-        // TODO: Inject this
-        _linkExtractor = new ExtractMeetingLink();
     }
 
     /// <summary>
@@ -48,8 +45,7 @@ public class FetchCalendarEvents
             return CalendarError.NoSourcesConfigured();
 
         var fetchTasks = sourceList
-            .Select(source =>
-                FetchFromSource(source, query, cancellationToken));
+            .Select(source => FetchFromSource(source, query, cancellationToken));
 
         var results = await Task.WhenAll(fetchTasks);
 
@@ -112,12 +108,7 @@ public class FetchCalendarEvents
     }
 
     private MeetingEvent EnrichRawEvent(RawCalendarEvent raw)
-    {
-        var linkQuery = new ExtractMeetingLinkQuery(raw.Description, raw.Location);
-        var link = _linkExtractor.Extract(linkQuery)
-            .Match(l => (MeetingLink?)l, _ => null);
-
-        return MeetingEvent.Create(
+        => MeetingEvent.Create(
             id: new MeetingId(raw.Calendar, raw.Id),
             title: raw.Title,
             startTime: raw.StartTime,
@@ -126,8 +117,8 @@ public class FetchCalendarEvents
             location: raw.Location,
             isAllDay: raw.IsAllDay,
             calendar: raw.Calendar,
-            link: link);
-    }
+            link: ExtractMeetingLink.Extract(new ExtractMeetingLinkQuery(raw.Description, raw.Location))
+                .Match(l => (MeetingLink?)l, _ => null));
 
     private record SourceFetchResult(
         CalendarName SourceName,

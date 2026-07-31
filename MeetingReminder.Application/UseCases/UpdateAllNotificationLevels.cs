@@ -7,10 +7,10 @@ namespace MeetingReminder.Application.UseCases;
 
 public sealed class UpdateAllNotificationLevels
 {
-    private ITimeProvider _timeProvider;
-    private IMeetingRepository _meetings;
-    private CalculateNotificationLevel _calculateNotificationLevel;
-    private IAppConfiguration _config;
+    private readonly ITimeProvider _timeProvider;
+    private readonly IMeetingRepository _meetings;
+    private readonly CalculateNotificationLevel _calculateNotificationLevel;
+    private readonly IAppConfiguration _config;
 
     public UpdateAllNotificationLevels(ITimeProvider timeProvider, IMeetingRepository meetings, CalculateNotificationLevel calculateNotificationLevel, IAppConfiguration config)
     {

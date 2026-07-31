@@ -41,7 +41,7 @@ public sealed class NotifyUser
             : Error.Flatten(errors);
     }
 
-    private async Task<Result<Unit, Error>> TryExecuteStrategy(IReadOnlyList<MeetingState> meetings, INotificationStrategy strategy)
+    private static async Task<Result<Unit, Error>> TryExecuteStrategy(IReadOnlyList<MeetingState> meetings, INotificationStrategy strategy)
     {
         var errors = new List<Error>();
         // Always execute per-cycle notifications (e.g., beeps, sounds)
