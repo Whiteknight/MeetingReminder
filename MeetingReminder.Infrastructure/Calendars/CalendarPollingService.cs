@@ -106,6 +106,9 @@ public class CalendarPollingService : ICalendarPollingService
         try
         {
             // Use UTC time throughout - local time conversion happens only in UI
+            // TODO: Double-check this logic, we're mixing local time and UTC time in a weird way
+            // What we want is for the local "today" bounds translated to UTC so items near midnight UTC are displayed in the correct day
+            // "The end of the local calendar day should be derived more defensively, e.g. using DateTime.Today converted to UTC or DateTimeOffset."
             var now = _timeProvider.UtcNow;
             var localNow = now.ToLocalTime();
             var query = new FetchCalendarEventsQuery(
@@ -114,7 +117,10 @@ public class CalendarPollingService : ICalendarPollingService
 
             var result = await _fetchCalendarEvents.Fetch(query, cancellationToken);
             if (result.IsSuccess)
-                await _consolidateIncomingMeetings.Consolidate(result.GetValueOrDefault(new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>()), cancellationToken);
+            {
+                var value = result.GetValueOrDefault(new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>());
+                await _consolidateIncomingMeetings.Consolidate(value, cancellationToken);
+            }
             // On failure, we don't update the channel - the UI will continue showing
             // the last known state. Errors are logged elsewhere.
         }

@@ -25,6 +25,7 @@ public class FetchCalendarEvents
     public FetchCalendarEvents(IEnumerable<ICalendarSource> sources)
     {
         _sources = sources ?? throw new ArgumentNullException(nameof(sources));
+        // TODO: Inject this
         _linkExtractor = new ExtractMeetingLink();
     }
 
@@ -94,6 +95,8 @@ public class FetchCalendarEvents
         }
 
         // Succeed if at least one source responded (even with an empty list)
+        // TODO: This case is probably always true, since it would only be 0 when there are no
+        // configured sources but that case has already been filtered out.
         if (eventsByCalendar.Count > 0)
             return eventsByCalendar;
 

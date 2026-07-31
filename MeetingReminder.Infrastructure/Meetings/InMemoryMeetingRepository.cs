@@ -67,7 +67,9 @@ public sealed class InMemoryMeetingRepository : IMeetingRepository
     }
 
     /// <summary>
-    /// Removes a meeting state from the repository.
+    /// Removes a meeting state from the repository. Removes are idempotent. Attempting to remove
+    /// an ID which does not exist or never existed will not throw an error. Removing an invalid
+    /// ID will produce an error.
     /// </summary>
     /// <param name="id">The ID of the meeting to remove</param>
     /// <returns>A Result indicating success or failure</returns>

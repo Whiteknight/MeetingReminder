@@ -5,7 +5,7 @@ namespace MeetingReminder.Application.UseCases;
 
 public sealed class ConsolidateIncomingMeetings
 {
-    private IMeetingRepository _meetings;
+    private readonly IMeetingRepository _meetings;
 
     public ConsolidateIncomingMeetings(IMeetingRepository meetings)
     {
@@ -16,6 +16,9 @@ public sealed class ConsolidateIncomingMeetings
         IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>> events,
         CancellationToken cancellationToken)
     {
+        // TODO: There's a concurrency issue here where we call .GetAllByCalendar() and then act
+        // on that list making updates to the repo, but other threads could be modifying these
+        // items at the same time. Some kind of synchonization or event-queueing would help.
         foreach (var (calendarSource, incomingMeetings) in events)
         {
             var existingResult = _meetings.GetAllByCalendar(calendarSource);
