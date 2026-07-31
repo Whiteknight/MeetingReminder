@@ -73,29 +73,31 @@ public class FetchCalendarEvents
     private Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, CalendarError> AggregateAndEnrichResults(
         SourceFetchResult[] results)
     {
-        var allRawEvents = new List<RawCalendarEvent>();
+        var eventsByCalendar = new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>();
         var errors = new List<CalendarError>();
 
         foreach (var result in results)
         {
             if (result.Events is not null)
-                allRawEvents.AddRange(result.Events);
+            {
+                // Include the calendar even when the event list is empty so that
+                // ConsolidateIncomingMeetings can remove stale entries for that calendar.
+                eventsByCalendar[result.SourceName] = result.Events
+                    .Select(EnrichRawEvent)
+                    .ToList()
+                    .AsReadOnly();
+            }
             else if (result.Error is not null)
+            {
                 errors.Add(result.Error);
+            }
         }
 
-        // Succeed if at least one source returned events
-        if (allRawEvents.Count > 0)
-        {
-            var enrichedEvents = allRawEvents
-                .ConvertAll(EnrichRawEvent)
-                .AsReadOnly();
-            return enrichedEvents
-                .GroupBy(e => e.Calendar)
-                .ToDictionary(e => e.Key, e => (IReadOnlyList<MeetingEvent>)e.ToList());
-        }
+        // Succeed if at least one source responded (even with an empty list)
+        if (eventsByCalendar.Count > 0)
+            return eventsByCalendar;
 
-        // All sources failed - return aggregate error
+        // All sources errored
         if (errors.Count == 0)
             return CalendarError.NoEventsFound();
 

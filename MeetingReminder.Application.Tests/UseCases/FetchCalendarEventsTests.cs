@@ -1,290 +1,230 @@
-//using AwesomeAssertions;
-//using MeetingReminder.Application.UseCases;
-//using MeetingReminder.Domain;
-//using MeetingReminder.Domain.Calendars;
-//using MeetingReminder.Domain.Meetings;
-//using NUnit.Framework;
+using AwesomeAssertions;
+using MeetingReminder.Application.UseCases;
+using MeetingReminder.Domain;
+using MeetingReminder.Domain.Calendars;
+using NUnit.Framework;
 
-//namespace MeetingReminder.Application.Tests.UseCases;
+namespace MeetingReminder.Application.Tests.UseCases;
 
-//[TestFixture]
-//public class FetchCalendarEventsTests
-//{
-//    private DateTime _startTime;
-//    private DateTime _endTime;
+[TestFixture]
+public class FetchCalendarEventsTests
+{
+    private static readonly CalendarName SourceA = new("calendar-a");
+    private static readonly CalendarName SourceB = new("calendar-b");
 
-//    [SetUp]
-//    public void SetUp()
-//    {
-//        _startTime = new DateTime(2026, 2, 19, 0, 0, 0);
-//        _endTime = _startTime.AddDays(7);
-//    }
+    private static readonly DateTime StartTime = new(2026, 7, 31, 8, 0, 0, DateTimeKind.Utc);
+    private static readonly DateTime EndTime = new(2026, 7, 31, 23, 59, 59, DateTimeKind.Utc);
 
-//    private RawCalendarEvent CreateRawEvent(string id, string title) =>
-//        new(
-//            Id: id,
-//            Title: title,
-//            StartTime: _startTime.AddHours(1),
-//            EndTime: _startTime.AddHours(2),
-//            Description: "Test description",
-//            Location: "Test location",
-//            IsAllDay: false,
-//            CalendarSource: "test-calendar");
+    private static RawCalendarEvent CreateRawEvent(string id, CalendarName calendar) =>
+        new(
+            Id: id,
+            Title: $"Meeting {id}",
+            StartTime: StartTime.AddHours(1),
+            EndTime: StartTime.AddHours(2),
+            Description: string.Empty,
+            Location: string.Empty,
+            IsAllDay: false,
+            Calendar: calendar);
 
-//    private class TestCalendarSource : ICalendarSource
-//    {
-//        private readonly IReadOnlyList<RawCalendarEvent>? _events;
-//        private readonly CalendarError? _error;
+    private static FetchCalendarEventsQuery DefaultQuery => new(StartTime, EndTime);
 
-//        public TestCalendarSource(string sourceName, IReadOnlyList<RawCalendarEvent> events)
-//        {
-//            SourceName = sourceName;
-//            _events = events;
-//        }
+    private sealed class StubCalendarSource : ICalendarSource
+    {
+        private readonly IReadOnlyList<RawCalendarEvent>? _events;
+        private readonly CalendarError? _error;
 
-//        public TestCalendarSource(string sourceName, CalendarError error)
-//        {
-//            SourceName = sourceName;
-//            _error = error;
-//        }
+        public StubCalendarSource(CalendarName name, IReadOnlyList<RawCalendarEvent> events)
+        {
+            Name = name;
+            _events = events;
+        }
 
-//        public string SourceName { get; }
+        public StubCalendarSource(CalendarName name, CalendarError error)
+        {
+            Name = name;
+            _error = error;
+        }
 
-//        public Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(
-//            DateTime startTime,
-//            DateTime endTime,
-//            CancellationToken cancellationToken)
-//        {
-//            if (_error is not null)
-//                return Task.FromResult<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>>(_error);
+        public CalendarName Name { get; }
 
-//            return Task.FromResult(Result.FromValue<IReadOnlyList<RawCalendarEvent>, CalendarError>(_events!));
-//        }
-//    }
+        public Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(
+            DateTime startTime,
+            DateTime endTime,
+            CancellationToken cancellationToken)
+        {
+            if (_error is not null)
+                return Task.FromResult<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>>(_error);
 
-//    private class DelayedCalendarSource : ICalendarSource
-//    {
-//        private readonly int _delayMs;
-//        private readonly IReadOnlyList<RawCalendarEvent> _events;
+            return Task.FromResult(Result.FromValue<IReadOnlyList<RawCalendarEvent>, CalendarError>(_events!));
+        }
+    }
 
-//        public DelayedCalendarSource(string sourceName, int delayMs, IReadOnlyList<RawCalendarEvent> events)
-//        {
-//            SourceName = sourceName;
-//            _delayMs = delayMs;
-//            _events = events;
-//        }
+    [TestFixture]
+    public sealed class NoSourcesTests : FetchCalendarEventsTests
+    {
+        [Test]
+        public async Task WithNoSources_ReturnsError()
+        {
+            var useCase = new FetchCalendarEvents([]);
 
-//        public string SourceName { get; }
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//        public async Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(
-//            DateTime startTime,
-//            DateTime endTime,
-//            CancellationToken cancellationToken)
-//        {
-//            await Task.Delay(_delayMs, cancellationToken);
-//            return Result.FromValue<IReadOnlyList<RawCalendarEvent>, CalendarError>(_events);
-//        }
-//    }
+            result.IsError.Should().BeTrue();
+        }
 
-//    [TestFixture]
-//    public sealed class SingleSourceTests : FetchCalendarEventsTests
-//    {
-//        [Test]
-//        public async Task ReturnsEvents_ReturnsSuccess()
-//        {
-//            var events = new List<RawCalendarEvent> { CreateRawEvent("1", "Meeting 1") };
-//            var source = new TestCalendarSource("source1", events);
-//            var fetchCalendarEvents = new FetchCalendarEvents([source]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+        [Test]
+        public void Constructor_WithNullSources_ThrowsArgumentNullException()
+        {
+            var act = () => new FetchCalendarEvents(null!);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            act.Should().Throw<ArgumentNullException>();
+        }
+    }
 
-//            result.IsSuccess.Should().BeTrue();
-//            var returnedEvents = result.Match(e => e, _ => []);
-//            returnedEvents.Should().HaveCount(1);
-//            returnedEvents[0].Id.Should().Be("1");
-//        }
+    [TestFixture]
+    public sealed class SingleSourceTests : FetchCalendarEventsTests
+    {
+        [Test]
+        public async Task WithEvents_ReturnsSuccessWithCalendarInDictionary()
+        {
+            var events = new[] { CreateRawEvent("evt-1", SourceA) };
+            var source = new StubCalendarSource(SourceA, events);
+            var useCase = new FetchCalendarEvents([source]);
 
-//        [Test]
-//        public async Task Fails_ReturnsError()
-//        {
-//            var error = new CalendarError("Network error", "source1");
-//            var source = new TestCalendarSource("source1", error);
-//            var fetchCalendarEvents = new FetchCalendarEvents([source]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().ContainKey(SourceA);
+            dict[SourceA].Should().HaveCount(1);
+        }
 
-//            result.IsError.Should().BeTrue();
-//            result.Match(_ => null!, e => e).Message.Should().Contain("Network error");
-//        }
+        [Test]
+        public async Task WithEmptyEventList_ReturnsSuccessWithCalendarPresentButEmpty()
+        {
+            // A source returning an empty list is not an error — it means "no events today".
+            // The calendar must still appear in the result so ConsolidateIncomingMeetings
+            // can remove any stale repository entries for that calendar.
+            var source = new StubCalendarSource(SourceA, Array.Empty<RawCalendarEvent>());
+            var useCase = new FetchCalendarEvents([source]);
 
-//        [Test]
-//        public async Task ReturnsEmptyList_ReturnsError()
-//        {
-//            var source = new TestCalendarSource("source1", new List<RawCalendarEvent>());
-//            var fetchCalendarEvents = new FetchCalendarEvents([source]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().ContainKey(SourceA);
+            dict[SourceA].Should().BeEmpty();
+        }
 
-//            result.IsError.Should().BeTrue();
-//            result.Match(_ => null!, e => e).Message.Should().Contain("No events found");
-//        }
-//    }
+        [Test]
+        public async Task WithError_ReturnsError()
+        {
+            var error = CalendarError.NetworkError(SourceA, "connection refused");
+            var source = new StubCalendarSource(SourceA, error);
+            var useCase = new FetchCalendarEvents([source]);
 
-//    [TestFixture]
-//    public sealed class MultipleSourceTests : FetchCalendarEventsTests
-//    {
-//        [Test]
-//        public async Task AllSucceed_AggregatesEvents()
-//        {
-//            var events1 = new List<RawCalendarEvent> { CreateRawEvent("1", "Meeting 1") };
-//            var events2 = new List<RawCalendarEvent> { CreateRawEvent("2", "Meeting 2") };
-//            var source1 = new TestCalendarSource("source1", events1);
-//            var source2 = new TestCalendarSource("source2", events2);
-//            var fetchCalendarEvents = new FetchCalendarEvents([source1, source2]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsError.Should().BeTrue();
+        }
+    }
 
-//            result.IsSuccess.Should().BeTrue();
-//            var returnedEvents = result.Match(e => e, _ => []);
-//            returnedEvents.Should().HaveCount(2);
-//            returnedEvents.Select(e => e.Id).Should().Contain("1");
-//            returnedEvents.Select(e => e.Id).Should().Contain("2");
-//        }
+    [TestFixture]
+    public sealed class MultipleSourceTests : FetchCalendarEventsTests
+    {
+        [Test]
+        public async Task BothSourcesHaveEvents_BothCalendarsInDictionary()
+        {
+            var sourceA = new StubCalendarSource(SourceA, new[] { CreateRawEvent("a-1", SourceA) });
+            var sourceB = new StubCalendarSource(SourceB, new[] { CreateRawEvent("b-1", SourceB) });
+            var useCase = new FetchCalendarEvents([sourceA, sourceB]);
 
-//        [Test]
-//        public async Task OneSucceedsOneFails_ReturnsSuccessWithPartialResults()
-//        {
-//            var events = new List<RawCalendarEvent> { CreateRawEvent("1", "Meeting 1") };
-//            var source1 = new TestCalendarSource("source1", events);
-//            var source2 = new TestCalendarSource("source2", new CalendarError("Failed", "source2"));
-//            var fetchCalendarEvents = new FetchCalendarEvents([source1, source2]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().ContainKey(SourceA);
+            dict.Should().ContainKey(SourceB);
+        }
 
-//            result.IsSuccess.Should().BeTrue();
-//            var returnedEvents = result.Match(e => e, _ => []);
-//            returnedEvents.Should().HaveCount(1);
-//            returnedEvents[0].Id.Should().Be("1");
-//        }
+        [Test]
+        public async Task OneSourceEmpty_OneSourceHasEvents_BothCalendarsInDictionary()
+        {
+            // This is the core regression case: source A returns nothing (end of day),
+            // source B returns events. Source A must still appear in the result so that
+            // stale meetings from source A are removed from the repository.
+            var sourceA = new StubCalendarSource(SourceA, Array.Empty<RawCalendarEvent>());
+            var sourceB = new StubCalendarSource(SourceB, new[] { CreateRawEvent("b-1", SourceB) });
+            var useCase = new FetchCalendarEvents([sourceA, sourceB]);
 
-//        [Test]
-//        public async Task AllFail_ReturnsAggregateError()
-//        {
-//            var source1 = new TestCalendarSource("source1", new CalendarError("Error 1", "source1"));
-//            var source2 = new TestCalendarSource("source2", new CalendarError("Error 2", "source2"));
-//            var fetchCalendarEvents = new FetchCalendarEvents([source1, source2]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().ContainKey(SourceA);
+            dict[SourceA].Should().BeEmpty();
+            dict.Should().ContainKey(SourceB);
+            dict[SourceB].Should().HaveCount(1);
+        }
 
-//            result.IsError.Should().BeTrue();
-//            var error = result.Match(_ => null!, e => e);
-//            error.Message.Should().Contain("2 calendar sources failed");
-//            error.Message.Should().Contain("Error 1");
-//            error.Message.Should().Contain("Error 2");
-//        }
-//    }
+        [Test]
+        public async Task BothSourcesEmpty_ReturnsSuccessWithBothCalendarsPresent()
+        {
+            var sourceA = new StubCalendarSource(SourceA, Array.Empty<RawCalendarEvent>());
+            var sourceB = new StubCalendarSource(SourceB, Array.Empty<RawCalendarEvent>());
+            var useCase = new FetchCalendarEvents([sourceA, sourceB]);
 
-//    [TestFixture]
-//    public sealed class EnrichmentTests : FetchCalendarEventsTests
-//    {
-//        [Test]
-//        public async Task EventWithMeetingLink_ExtractsLink()
-//        {
-//            var events = new List<RawCalendarEvent>
-//            {
-//                new RawCalendarEvent(
-//                    Id: "1",
-//                    Title: "Meeting with link",
-//                    StartTime: _startTime.AddHours(1),
-//                    EndTime: _startTime.AddHours(2),
-//                    Description: "Join at https://meet.google.com/abc-defg-hij",
-//                    Location: "",
-//                    IsAllDay: false,
-//                    CalendarSource: "test")
-//            };
-//            var source = new TestCalendarSource("source1", events);
-//            var fetchCalendarEvents = new FetchCalendarEvents([source]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().ContainKey(SourceA);
+            dict.Should().ContainKey(SourceB);
+        }
 
-//            result.IsSuccess.Should().BeTrue();
-//            var returnedEvents = result.Match(e => e, _ => []);
-//            returnedEvents[0].Link.Should().NotBeNull();
-//            returnedEvents[0].Link.Should().BeOfType<GoogleMeetLink>();
-//        }
+        [Test]
+        public async Task OneSourceErrors_OneSourceHasEvents_SucceedsWithSuccessfulCalendar()
+        {
+            var sourceA = new StubCalendarSource(SourceA, CalendarError.NetworkError(SourceA, "timeout"));
+            var sourceB = new StubCalendarSource(SourceB, new[] { CreateRawEvent("b-1", SourceB) });
+            var useCase = new FetchCalendarEvents([sourceA, sourceB]);
 
-//        [Test]
-//        public async Task EventWithoutMeetingLink_ReturnsNullLink()
-//        {
-//            var events = new List<RawCalendarEvent>
-//            {
-//                new RawCalendarEvent(
-//                    Id: "1",
-//                    Title: "Meeting without link",
-//                    StartTime: _startTime.AddHours(1),
-//                    EndTime: _startTime.AddHours(2),
-//                    Description: "No link here",
-//                    Location: "Room 101",
-//                    IsAllDay: false,
-//                    CalendarSource: "test")
-//            };
-//            var source = new TestCalendarSource("source1", events);
-//            var fetchCalendarEvents = new FetchCalendarEvents([source]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().NotContainKey(SourceA);
+            dict.Should().ContainKey(SourceB);
+        }
 
-//            result.IsSuccess.Should().BeTrue();
-//            var returnedEvents = result.Match(e => e, _ => []);
-//            returnedEvents[0].Link.Should().BeNull();
-//        }
-//    }
+        [Test]
+        public async Task OneSourceErrors_OneSourceEmpty_SucceedsWithEmptyCalendar()
+        {
+            // An errored source should NOT suppress the empty source from being included.
+            var sourceA = new StubCalendarSource(SourceA, CalendarError.NetworkError(SourceA, "timeout"));
+            var sourceB = new StubCalendarSource(SourceB, Array.Empty<RawCalendarEvent>());
+            var useCase = new FetchCalendarEvents([sourceA, sourceB]);
 
-//    [TestFixture]
-//    public sealed class EdgeCaseTests : FetchCalendarEventsTests
-//    {
-//        [Test]
-//        public async Task NoSources_ReturnsError()
-//        {
-//            var fetchCalendarEvents = new FetchCalendarEvents([]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
+            result.IsSuccess.Should().BeTrue();
+            var dict = result.GetValueOrDefault(null!);
+            dict.Should().ContainKey(SourceB);
+            dict[SourceB].Should().BeEmpty();
+        }
 
-//            result.IsError.Should().BeTrue();
-//            result.Match(_ => null!, e => e).Message.Should().Contain("No calendar sources configured");
-//        }
+        [Test]
+        public async Task AllSourcesError_ReturnsAggregateError()
+        {
+            var sourceA = new StubCalendarSource(SourceA, CalendarError.NetworkError(SourceA, "timeout"));
+            var sourceB = new StubCalendarSource(SourceB, CalendarError.NetworkError(SourceB, "refused"));
+            var useCase = new FetchCalendarEvents([sourceA, sourceB]);
 
-//        [Test]
-//        public void Constructor_NullSources_ThrowsArgumentNullException()
-//        {
-//            var action = () => new FetchCalendarEvents(null!);
+            var result = await useCase.Fetch(DefaultQuery, CancellationToken.None);
 
-//            action.Should().Throw<ArgumentNullException>();
-//        }
-
-//        [Test]
-//        public async Task FetchesConcurrently_CompletesInReasonableTime()
-//        {
-//            var source1 = new DelayedCalendarSource("source1", 100, [CreateRawEvent("1", "Meeting 1")]);
-//            var source2 = new DelayedCalendarSource("source2", 100, [CreateRawEvent("2", "Meeting 2")]);
-//            var source3 = new DelayedCalendarSource("source3", 100, [CreateRawEvent("3", "Meeting 3")]);
-//            var fetchCalendarEvents = new FetchCalendarEvents([source1, source2, source3]);
-//            var query = new FetchCalendarEventsQuery(_startTime, _endTime);
-
-//            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-//            var result = await fetchCalendarEvents.Fetch(query, CancellationToken.None);
-//            stopwatch.Stop();
-
-//            result.IsSuccess.Should().BeTrue();
-//            stopwatch.ElapsedMilliseconds.Should().BeLessThan(250);
-//        }
-//    }
-//}
+            result.IsError.Should().BeTrue();
+            var error = result.GetErrorOrDefault(null!);
+            error.Message.Should().Contain("2");
+        }
+    }
+}
