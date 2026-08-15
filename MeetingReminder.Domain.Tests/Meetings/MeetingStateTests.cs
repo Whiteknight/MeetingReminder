@@ -132,6 +132,71 @@ public class MeetingStateTests
     }
 
     [TestFixture]
+    public sealed class UnacknowledgeTests : MeetingStateTests
+    {
+        [Test]
+        public void SetsIsAcknowledgedToFalse()
+        {
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.Acknowledge(DateTime.UtcNow);
+            state.IsAcknowledged.Should().BeTrue();
+
+            state = state.Unacknowledge();
+
+            state.IsAcknowledged.Should().BeFalse();
+        }
+
+        [Test]
+        public void ResetsCurrentLevelToNone()
+        {
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Urgent, DateTime.UtcNow);
+            state = state.Acknowledge(DateTime.UtcNow);
+
+            state = state.Unacknowledge();
+
+            state.CurrentLevel.Should().Be(NotificationLevel.None);
+        }
+
+        [Test]
+        public void ResetsPreviousLevelToNone()
+        {
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Urgent, DateTime.UtcNow);
+            state = state.Acknowledge(DateTime.UtcNow);
+
+            state = state.Unacknowledge();
+
+            state.PreviousLevel.Should().Be(NotificationLevel.None);
+        }
+
+        [Test]
+        public void WhenNotAcknowledged_RemainsUnacknowledged()
+        {
+            var state = MeetingState.New(CreateTestMeeting());
+            state.IsAcknowledged.Should().BeFalse();
+
+            state = state.Unacknowledge();
+
+            state.IsAcknowledged.Should().BeFalse();
+            state.CurrentLevel.Should().Be(NotificationLevel.None);
+        }
+
+        [Test]
+        public void AfterUnacknowledge_LevelCanEscalateAgain()
+        {
+            var state = MeetingState.New(CreateTestMeeting());
+            state = state.UpdateNotificationLevel(NotificationLevel.Moderate, DateTime.UtcNow);
+            state = state.Acknowledge(DateTime.UtcNow);
+            state = state.Unacknowledge();
+
+            state = state.UpdateNotificationLevel(NotificationLevel.Gentle, DateTime.UtcNow);
+
+            state.CurrentLevel.Should().Be(NotificationLevel.Gentle);
+        }
+    }
+
+    [TestFixture]
     public sealed class InitialStateTests : MeetingStateTests
     {
         [Test]

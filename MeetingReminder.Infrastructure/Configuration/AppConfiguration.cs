@@ -13,6 +13,7 @@ namespace MeetingReminder.Infrastructure.Configuration;
 /// <param name="Calendars">List of configured calendar sources</param>
 public record AppConfiguration(
     TimeSpan PollingInterval,
+    TimeSpan SilenceDuration,
     List<string> EnabledNotificationStrategies,
     NotificationThresholds Thresholds,
     List<CalendarConfiguration> Calendars) : IAppConfiguration
@@ -21,6 +22,7 @@ public record AppConfiguration(
     /// Parameterless constructor for YAML deserialization.
     /// </summary>
     public AppConfiguration() : this(
+        TimeSpan.FromMinutes(5),
         TimeSpan.FromMinutes(5),
         ["Beep", "SystemNotification"],
         NotificationThresholds.Default,
@@ -54,6 +56,7 @@ public record AppConfiguration(
     public static AppConfiguration Default
         => new(
             PollingInterval: TimeSpan.FromMinutes(5),
+            SilenceDuration: TimeSpan.FromMinutes(5),
             EnabledNotificationStrategies: ["Beep", "SystemNotification"],
             Thresholds: NotificationThresholds.Default,
             Calendars: []);
@@ -73,6 +76,14 @@ public record AppConfiguration(
         // Polling interval should not exceed 1 hour (reasonable upper bound)
         if (PollingInterval > TimeSpan.FromHours(1))
             errors.Add("PollingInterval should not exceed 1 hour");
+
+        // Silence duration must be positive
+        if (SilenceDuration <= TimeSpan.Zero)
+            errors.Add("SilenceDuration must be greater than zero");
+
+        // Silence duration should not exceed 2 hours (reasonable upper bound)
+        if (SilenceDuration > TimeSpan.FromHours(2))
+            errors.Add("SilenceDuration should not exceed 2 hours");
 
         // Validate notification thresholds
         if (!Thresholds.IsValid())

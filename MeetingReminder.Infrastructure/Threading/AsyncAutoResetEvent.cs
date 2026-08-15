@@ -20,22 +20,29 @@ public sealed class AsyncAutoResetEvent : IChangeNotifier
     /// <inheritdoc />
     public async Task<ConsoleKeyInfo> WaitAsync(CancellationToken cancellationToken, TimeSpan timeout = default)
     {
-        var readTask = _channel.Reader.ReadAsync(cancellationToken).AsTask();
-
         if (timeout <= TimeSpan.Zero)
-            return await readTask;
+        {
+            return await _channel.Reader.ReadAsync(cancellationToken);
+        }
 
-        var timeoutTask = Task.Delay(timeout, cancellationToken);
-        var completed = await Task.WhenAny(readTask, timeoutTask);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
 
-        // If the cancellation token fired, timeoutTask will be the completed task (as cancelled).
-        // Propagate cancellation by checking the token before returning a default value.
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (completed == timeoutTask)
+        try
+        {
+            // WaitToReadAsync suspends until an item is available or the token fires.
+            // It does NOT consume the item, so a subsequent TryRead is the only active read.
+            await _channel.Reader.WaitToReadAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Distinguish between caller cancellation (propagate) and our own timeout (return default).
+            cancellationToken.ThrowIfCancellationRequested();
             return default; // Timeout elapsed - caller should redraw without a key
+        }
 
-        return await readTask; // Already completed; unwrap to propagate any exception
+        _channel.Reader.TryRead(out var key);
+        return key;
     }
 
     public void Set()

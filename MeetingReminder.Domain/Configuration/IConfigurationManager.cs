@@ -33,6 +33,12 @@ public interface IAppConfiguration
     TimeSpan PollingInterval { get; }
 
     /// <summary>
+    /// Duration for which the app is silenced when the user presses 'S'.
+    /// Defaults to 5 minutes if not configured.
+    /// </summary>
+    TimeSpan SilenceDuration { get; }
+
+    /// <summary>
     /// List of enabled notification strategy names.
     /// </summary>
     IReadOnlyList<string> EnabledNotificationStrategies { get; }

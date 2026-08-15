@@ -142,12 +142,12 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds the AcknowledgeMeeting use case.
+    /// Adds the AcknowledgeMeeting and UnacknowledgeMeeting use cases.
     /// </summary>
     public static IServiceCollection AddAcknowledgementUseCases(this IServiceCollection services)
     {
         services.AddSingleton<AcknowledgeMeeting>();
-
+        services.AddSingleton<UnacknowledgeMeeting>();
         return services;
     }
 
@@ -173,13 +173,14 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds the notification processing service.
+    /// Adds the notification processing service and silence service.
     /// </summary>
     public static IServiceCollection AddNotificationProcessing(this IServiceCollection services)
     {
         // Register platform-specific notification strategies
         services.AddNotificationStrategies();
 
+        services.AddSingleton<ISilenceService, SilenceService>();
         services.AddSingleton<NotificationProcessingService>();
 
         services.AddHostedService<NotificationProcessingHostedService>();

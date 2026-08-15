@@ -345,6 +345,7 @@ public class CalendarPollingServiceTests
     {
         public FakeConfiguration(TimeSpan pollingInterval) => PollingInterval = pollingInterval;
         public TimeSpan PollingInterval { get; }
+        public TimeSpan SilenceDuration => TimeSpan.FromMinutes(5);
         public IReadOnlyList<string> EnabledNotificationStrategies => [];
         public INotificationThresholds Thresholds => new FakeThresholds();
         public IReadOnlyList<ICalendarConfiguration> Calendars => [];

@@ -20,6 +20,12 @@ public class InputCommandMapper
         if (keyInfo.Key == ConsoleKey.O && !HasCtrl(keyInfo))
             return new InputCommand.OpenAndAcknowledge();
 
+        if (keyInfo.Key == ConsoleKey.C && !HasCtrl(keyInfo))
+            return new InputCommand.Unacknowledge();
+
+        if (keyInfo.Key == ConsoleKey.S && !HasCtrl(keyInfo))
+            return new InputCommand.Silence();
+
         if (keyInfo.Key == ConsoleKey.Q && !HasCtrl(keyInfo))
             return new InputCommand.Quit();
 

@@ -43,6 +43,18 @@ public readonly record struct MeetingState(MeetingEvent Event, NotificationLevel
             LastNotificationTime = timestamp
         };
 
+    /// <summary>
+    /// Removes the acknowledgement from this meeting, allowing notifications to resume.
+    /// Resets notification levels to None so the notification engine recalculates on the next cycle.
+    /// </summary>
+    public MeetingState Unacknowledge()
+        => this with
+        {
+            IsAcknowledged = false,
+            CurrentLevel = NotificationLevel.None,
+            PreviousLevel = NotificationLevel.None
+        };
+
     public MeetingState UpdateEvent(MeetingEvent meeting)
         => this with { Event = NotNull(meeting) };
 

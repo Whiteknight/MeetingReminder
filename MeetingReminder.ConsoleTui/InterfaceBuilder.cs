@@ -13,11 +13,12 @@ public static class InterfaceBuilder
         int maxRows,
         int selectedMeetingIndex,
         DateTime localNow,
-        IPollingSchedule pollingSchedule)
+        IPollingSchedule pollingSchedule,
+        ISilenceService silenceService)
         => new Rows(
             BuildMeetingsPanel(meetings, maxRows, selectedMeetingIndex, localNow),
-            BuildStatusBar(localNow, pollingSchedule),
-            BuildKeyboardHints());
+            BuildStatusBar(localNow, pollingSchedule, silenceService),
+            BuildKeyboardHints(silenceService));
 
     private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex, DateTime localNow)
         => new Panel(BuildEventsTable(meetings, maxRows, selectedMeetingIndex))
@@ -26,19 +27,22 @@ public static class InterfaceBuilder
             .BorderColor(Color.DarkSlateGray1)
             .Expand();
 
-    private static IRenderable BuildStatusBar(DateTime localNow, IPollingSchedule pollingSchedule)
+    private static IRenderable BuildStatusBar(DateTime localNow, IPollingSchedule pollingSchedule, ISilenceService silenceService)
     {
-        var countdownText = FormatCountdown(localNow, pollingSchedule);
-        return new Markup($"[grey]Next refresh: {countdownText}[/]");
+        var refreshText = FormatRefreshCountdown(localNow, pollingSchedule);
+        var silenceText = FormatSilenceCountdown(localNow, silenceService);
+
+        return silenceText is null
+            ? new Markup($"[grey]Next refresh: {refreshText}[/]")
+            : new Markup($"[grey]Next refresh: {refreshText}[/]  [yellow]Silenced: {silenceText}[/]");
     }
 
-    private static string FormatCountdown(DateTime localNow, IPollingSchedule pollingSchedule)
+    private static string FormatRefreshCountdown(DateTime localNow, IPollingSchedule pollingSchedule)
     {
         var nextFetchAt = pollingSchedule.NextFetchAt;
         if (nextFetchAt is null)
             return "[grey]waiting...[/]";
 
-        // NextFetchAt is UTC; localNow is local - compare against UtcNow equivalent
         var remaining = nextFetchAt.Value - localNow.ToUniversalTime();
         if (remaining <= TimeSpan.Zero)
             return "[yellow]fetching...[/]";
@@ -46,6 +50,20 @@ public static class InterfaceBuilder
         return remaining.TotalHours >= 1
             ? $"{(int)remaining.TotalHours}h {remaining.Minutes:D2}m {remaining.Seconds:D2}s"
             : $"{remaining.Minutes}m {remaining.Seconds:D2}s";
+    }
+
+    private static string? FormatSilenceCountdown(DateTime localNow, ISilenceService silenceService)
+    {
+        if (!silenceService.IsActive || silenceService.SilencedUntil is null)
+            return null;
+
+        var remaining = silenceService.SilencedUntil.Value - localNow.ToUniversalTime();
+        if (remaining <= TimeSpan.Zero)
+            return null;
+
+        return remaining.TotalHours >= 1
+            ? $"{(int)remaining.TotalHours}h {remaining.Minutes:D2}m {remaining.Seconds:D2}s remaining"
+            : $"{remaining.Minutes}m {remaining.Seconds:D2}s remaining";
     }
 
     private static IRenderable BuildEventsTable(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex)
@@ -169,11 +187,15 @@ public static class InterfaceBuilder
             string v => v.Length > maxLength ? v[..(maxLength - 3)] + "..." : v
         };
 
-    private static IRenderable BuildKeyboardHints()
-        // TODO: Should have a way to un-ack a meeting that was prematurely acknowledged
-        => new Markup(
+    private static IRenderable BuildKeyboardHints(ISilenceService silenceService)
+    {
+        var silenceLabel = silenceService.IsActive ? "[grey]S[/] Unsilence" : "[grey]S[/] Silence";
+        return new Markup(
             "[grey]Enter/Spacebar[/] Acknowledge  " +
+            "[grey]C[/] Un-acknowledge  " +
             "[grey]O[/] Open link  " +
+            $"{silenceLabel}  " +
             "[grey]Up/Down[/] Navigate  " +
             "[grey]Ctrl+C[/] Exit");
+    }
 }

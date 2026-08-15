@@ -51,6 +51,34 @@ public class KeyboardInputServiceTests
     }
 
     [Test]
+    public void CKey_ReturnsUnacknowledge()
+    {
+        var key = new ConsoleKeyInfo('c', ConsoleKey.C, false, false, false);
+        _service.MapKey(key).Should().BeOfType<InputCommand.Unacknowledge>();
+    }
+
+    [Test]
+    public void CtrlC_ReturnsNone()
+    {
+        var key = new ConsoleKeyInfo('c', ConsoleKey.C, false, false, true);
+        _service.MapKey(key).Should().BeOfType<InputCommand.None>();
+    }
+
+    [Test]
+    public void SKey_ReturnsSilence()
+    {
+        var key = new ConsoleKeyInfo('s', ConsoleKey.S, false, false, false);
+        _service.MapKey(key).Should().BeOfType<InputCommand.Silence>();
+    }
+
+    [Test]
+    public void CtrlS_ReturnsNone()
+    {
+        var key = new ConsoleKeyInfo('s', ConsoleKey.S, false, false, true);
+        _service.MapKey(key).Should().BeOfType<InputCommand.None>();
+    }
+
+    [Test]
     public void QKey_ReturnsQuit()
     {
         var key = new ConsoleKeyInfo('q', ConsoleKey.Q, false, false, false);

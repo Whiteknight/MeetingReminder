@@ -16,6 +16,7 @@ public class NotificationProcessingService : IDisposable
 
     private readonly UpdateAllNotificationLevels _updateAllNotificationLevels;
     private readonly NotifyUser _executeNotificationStrategies;
+    private readonly ISilenceService _silenceService;
     private readonly ILogger<NotificationProcessingService>? _logger;
 
     private Timer? _notificationTimer;
@@ -32,11 +33,13 @@ public class NotificationProcessingService : IDisposable
         IEnumerable<INotificationStrategy> strategies,
         UpdateAllNotificationLevels updateAllNotificationLevels,
         NotifyUser executeNotificationStrategies,
+        ISilenceService silenceService,
         IAppConfiguration config,
         ILogger<NotificationProcessingService>? logger = null)
     {
         _updateAllNotificationLevels = updateAllNotificationLevels;
         _executeNotificationStrategies = executeNotificationStrategies;
+        _silenceService = silenceService;
         _logger = logger;
     }
 
@@ -89,6 +92,12 @@ public class NotificationProcessingService : IDisposable
             return;
 
         var nearMeetings = _updateAllNotificationLevels.UpdateAndReturnNotifiableMeetings();
+
+        if (_silenceService.IsActive)
+        {
+            _logger?.LogDebug("Notifications silenced until {SilencedUntil}; skipping strategy execution.", _silenceService.SilencedUntil);
+            return;
+        }
 
         var notifyResult = await _executeNotificationStrategies.Notify(nearMeetings);
         notifyResult.OnError(error => _logger?.LogError("Error processing notifications: {Error}", error));

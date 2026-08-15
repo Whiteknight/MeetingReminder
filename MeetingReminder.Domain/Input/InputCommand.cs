@@ -12,6 +12,8 @@ public abstract record InputCommand
     public sealed record NavigateDown : InputCommand;
     public sealed record Acknowledge : InputCommand;
     public sealed record OpenAndAcknowledge : InputCommand;
+    public sealed record Unacknowledge : InputCommand;
+    public sealed record Silence : InputCommand;
     public sealed record Quit : InputCommand;
     public sealed record None : InputCommand;
 }

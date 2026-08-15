@@ -1,8 +1,10 @@
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Calendars;
+using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Input;
 using MeetingReminder.Domain.Meetings;
+using MeetingReminder.Domain.Notifications;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -19,6 +21,9 @@ public class UserInterfaceService : BackgroundService
     private readonly IMeetingRepository _meetings;
     private readonly InputCommandMapper _keyboardInputHandler;
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
+    private readonly UnacknowledgeMeeting _unacknowledgeMeeting;
+    private readonly ISilenceService _silenceService;
+    private readonly IAppConfiguration _config;
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly IChangeNotifier _changes;
     private readonly ITimeProvider _time;
@@ -31,6 +36,9 @@ public class UserInterfaceService : BackgroundService
         IMeetingRepository meetings,
         InputCommandMapper keyboardInputHandler,
         AcknowledgeMeeting acknowledgeMeeting,
+        UnacknowledgeMeeting unacknowledgeMeeting,
+        ISilenceService silenceService,
+        IAppConfiguration config,
         IHostApplicationLifetime applicationLifetime,
         IChangeNotifier changes,
         ITimeProvider time,
@@ -40,6 +48,9 @@ public class UserInterfaceService : BackgroundService
         _meetings = meetings;
         _keyboardInputHandler = keyboardInputHandler;
         _acknowledgeMeeting = acknowledgeMeeting;
+        _unacknowledgeMeeting = unacknowledgeMeeting;
+        _silenceService = silenceService;
+        _config = config;
         _applicationLifetime = applicationLifetime;
         _changes = changes;
         _time = time;
@@ -67,7 +78,7 @@ public class UserInterfaceService : BackgroundService
                 {
                     var meetings = _meetings.GetOrderedUpcomingEvents();
                     SetupSelectedIndex(meetings);
-                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now, _pollingSchedule));
+                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now, _pollingSchedule, _silenceService));
                     while (!stoppingToken.IsCancellationRequested)
                     {
                         var key = await _changes.WaitAsync(stoppingToken, TimeSpan.FromSeconds(1));
@@ -75,7 +86,7 @@ public class UserInterfaceService : BackgroundService
                         if (key.Key != ConsoleKey.None)
                             await ProcessKeyboardInput(key, meetings, stoppingToken);
                         SetupSelectedIndex(meetings);
-                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now, _pollingSchedule));
+                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now, _pollingSchedule, _silenceService));
                     }
                 });
         }
@@ -119,6 +130,14 @@ public class UserInterfaceService : BackgroundService
                 await HandleAcknowledgeAsync(meetings, openLink: true, stoppingToken);
                 break;
 
+            case InputCommand.Unacknowledge:
+                HandleUnacknowledge(meetings);
+                break;
+
+            case InputCommand.Silence:
+                HandleSilence();
+                break;
+
             case InputCommand.Quit:
                 _logger.LogInformation("Quit requested by user");
                 _applicationLifetime.StopApplication();
@@ -131,6 +150,30 @@ public class UserInterfaceService : BackgroundService
         var selectedMeeting = GetSelectedMeeting(meetings);
         if (selectedMeeting.Event is not null)
             await _acknowledgeMeeting.Acknowledge(new AcknowledgeMeetingCommand(selectedMeeting.Event.Id, openLink));
+    }
+
+    private void HandleUnacknowledge(IReadOnlyList<MeetingState> meetings)
+    {
+        var selectedMeeting = GetSelectedMeeting(meetings);
+        if (selectedMeeting.Event is null)
+            return;
+
+        _unacknowledgeMeeting.Unacknowledge(new UnacknowledgeMeetingCommand(selectedMeeting.Event.Id))
+            .OnError(error => _logger.LogWarning("Failed to un-acknowledge meeting: {Error}", error));
+    }
+
+    private void HandleSilence()
+    {
+        if (_silenceService.IsActive)
+        {
+            _silenceService.Deactivate();
+            _logger.LogInformation("Silence deactivated by user.");
+            return;
+        }
+
+        var until = _time.UtcNow.Add(_config.SilenceDuration);
+        _silenceService.Activate(until);
+        _logger.LogInformation("Notifications silenced until {Until}.", until);
     }
 
     private MeetingState GetSelectedMeeting(IReadOnlyList<MeetingState> meetings)
