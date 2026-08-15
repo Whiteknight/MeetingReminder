@@ -1,4 +1,5 @@
-﻿using MeetingReminder.Domain.Meetings;
+﻿using MeetingReminder.Domain.Calendars;
+using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -7,17 +8,45 @@ namespace MeetingReminder.ConsoleTui;
 
 public static class InterfaceBuilder
 {
-    public static IRenderable BuildDisplay(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex, DateTime time)
+    public static IRenderable BuildDisplay(
+        IReadOnlyList<MeetingState> meetings,
+        int maxRows,
+        int selectedMeetingIndex,
+        DateTime localNow,
+        IPollingSchedule pollingSchedule)
         => new Rows(
-            BuildMeetingsPanel(meetings, maxRows, selectedMeetingIndex, time),
+            BuildMeetingsPanel(meetings, maxRows, selectedMeetingIndex, localNow),
+            BuildStatusBar(localNow, pollingSchedule),
             BuildKeyboardHints());
 
-    private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex, DateTime time)
+    private static IRenderable BuildMeetingsPanel(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex, DateTime localNow)
         => new Panel(BuildEventsTable(meetings, maxRows, selectedMeetingIndex))
-            .Header($"[yellow]{time:ddd MMM dd} Meetings[/]")
+            .Header($"[yellow]{localNow:ddd MMM dd} Meetings[/]")
             .Border(BoxBorder.Rounded)
             .BorderColor(Color.DarkSlateGray1)
             .Expand();
+
+    private static IRenderable BuildStatusBar(DateTime localNow, IPollingSchedule pollingSchedule)
+    {
+        var countdownText = FormatCountdown(localNow, pollingSchedule);
+        return new Markup($"[grey]Next refresh: {countdownText}[/]");
+    }
+
+    private static string FormatCountdown(DateTime localNow, IPollingSchedule pollingSchedule)
+    {
+        var nextFetchAt = pollingSchedule.NextFetchAt;
+        if (nextFetchAt is null)
+            return "[grey]waiting...[/]";
+
+        // NextFetchAt is UTC; localNow is local - compare against UtcNow equivalent
+        var remaining = nextFetchAt.Value - localNow.ToUniversalTime();
+        if (remaining <= TimeSpan.Zero)
+            return "[yellow]fetching...[/]";
+
+        return remaining.TotalHours >= 1
+            ? $"{(int)remaining.TotalHours}h {remaining.Minutes:D2}m {remaining.Seconds:D2}s"
+            : $"{remaining.Minutes}m {remaining.Seconds:D2}s";
+    }
 
     private static IRenderable BuildEventsTable(IReadOnlyList<MeetingState> meetings, int maxRows, int selectedMeetingIndex)
     {

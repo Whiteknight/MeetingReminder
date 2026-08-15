@@ -1,5 +1,6 @@
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
+using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Input;
 using MeetingReminder.Domain.Meetings;
 using Microsoft.Extensions.Hosting;
@@ -21,6 +22,7 @@ public class UserInterfaceService : BackgroundService
     private readonly IHostApplicationLifetime _applicationLifetime;
     private readonly IChangeNotifier _changes;
     private readonly ITimeProvider _time;
+    private readonly IPollingSchedule _pollingSchedule;
     private readonly ILogger<UserInterfaceService> _logger;
 
     private int _selectedMeetingIndex = -1; // -1 = auto-select next upcoming meeting
@@ -32,6 +34,7 @@ public class UserInterfaceService : BackgroundService
         IHostApplicationLifetime applicationLifetime,
         IChangeNotifier changes,
         ITimeProvider time,
+        IPollingSchedule pollingSchedule,
         ILogger<UserInterfaceService> logger)
     {
         _meetings = meetings;
@@ -40,6 +43,7 @@ public class UserInterfaceService : BackgroundService
         _applicationLifetime = applicationLifetime;
         _changes = changes;
         _time = time;
+        _pollingSchedule = pollingSchedule;
         _logger = logger;
     }
 
@@ -63,15 +67,15 @@ public class UserInterfaceService : BackgroundService
                 {
                     var meetings = _meetings.GetOrderedUpcomingEvents();
                     SetupSelectedIndex(meetings);
-                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now));
+                    ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now, _pollingSchedule));
                     while (!stoppingToken.IsCancellationRequested)
                     {
-                        var key = await _changes.WaitAsync(stoppingToken);
+                        var key = await _changes.WaitAsync(stoppingToken, TimeSpan.FromSeconds(1));
                         meetings = _meetings.GetOrderedUpcomingEvents();
                         if (key.Key != ConsoleKey.None)
                             await ProcessKeyboardInput(key, meetings, stoppingToken);
                         SetupSelectedIndex(meetings);
-                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now));
+                        ctx.UpdateTarget(InterfaceBuilder.BuildDisplay(meetings, _maxRows, _selectedMeetingIndex, _time.Now, _pollingSchedule));
                     }
                 });
         }

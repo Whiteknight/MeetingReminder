@@ -97,6 +97,11 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddCalendarPolling(this IServiceCollection services)
     {
+        // Register the concrete type first so both CalendarPollingService (needs SetNextFetchAt)
+        // and the IPollingSchedule binding resolve to the same singleton instance.
+        services.AddSingleton<PollingSchedule>();
+        services.AddSingleton<IPollingSchedule>(sp => sp.GetRequiredService<PollingSchedule>());
+
         services.AddSingleton<ICalendarPollingService, CalendarPollingService>();
 
         services.AddHostedService<CalendarPollingHostedService>();

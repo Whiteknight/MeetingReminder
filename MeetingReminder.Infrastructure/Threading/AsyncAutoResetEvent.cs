@@ -1,4 +1,4 @@
-﻿using System.Threading.Channels;
+using System.Threading.Channels;
 using MeetingReminder.Domain;
 
 namespace MeetingReminder.Infrastructure.Threading;
@@ -17,9 +17,25 @@ public sealed class AsyncAutoResetEvent : IChangeNotifier
         });
     }
 
-    public Task<ConsoleKeyInfo> WaitAsync(CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public async Task<ConsoleKeyInfo> WaitAsync(CancellationToken cancellationToken, TimeSpan timeout = default)
     {
-        return _channel.Reader.ReadAsync(cancellationToken).AsTask();
+        var readTask = _channel.Reader.ReadAsync(cancellationToken).AsTask();
+
+        if (timeout <= TimeSpan.Zero)
+            return await readTask;
+
+        var timeoutTask = Task.Delay(timeout, cancellationToken);
+        var completed = await Task.WhenAny(readTask, timeoutTask);
+
+        // If the cancellation token fired, timeoutTask will be the completed task (as cancelled).
+        // Propagate cancellation by checking the token before returning a default value.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (completed == timeoutTask)
+            return default; // Timeout elapsed - caller should redraw without a key
+
+        return await readTask; // Already completed; unwrap to propagate any exception
     }
 
     public void Set()

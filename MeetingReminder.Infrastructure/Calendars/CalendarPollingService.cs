@@ -19,6 +19,7 @@ public class CalendarPollingService : ICalendarPollingService
     private readonly SemaphoreSlim _pollLock;
     private readonly ConsolidateIncomingMeetings _consolidateIncomingMeetings;
     private readonly ITimeProvider _timeProvider;
+    private readonly PollingSchedule _pollingSchedule;
 
     private Timer? _timer;
     private CancellationTokenSource? _cts;
@@ -28,18 +29,22 @@ public class CalendarPollingService : ICalendarPollingService
     /// Creates a new instance of the CalendarPollingService.
     /// </summary>
     /// <param name="fetchCalendarEvents">Use case for fetching calendar events</param>
+    /// <param name="consolidateIncomingMeetings">Use case for consolidating incoming meeting data</param>
     /// <param name="configuration">Application configuration containing polling interval</param>
-    /// <param name="timeProvider">Optional time provider for testing (defaults to system time)</param>
+    /// <param name="timeProvider">Time provider for testability</param>
+    /// <param name="pollingSchedule">Shared store updated with the next scheduled fetch time</param>
     public CalendarPollingService(
         FetchCalendarEvents fetchCalendarEvents,
         ConsolidateIncomingMeetings consolidateIncomingMeetings,
         IAppConfiguration configuration,
-        ITimeProvider timeProvider)
+        ITimeProvider timeProvider,
+        PollingSchedule pollingSchedule)
     {
         _fetchCalendarEvents = NotNull(fetchCalendarEvents);
         _pollingInterval = configuration?.PollingInterval ?? TimeSpan.FromMinutes(5);
         _consolidateIncomingMeetings = NotNull(consolidateIncomingMeetings);
         _timeProvider = timeProvider;
+        _pollingSchedule = NotNull(pollingSchedule);
         _pollLock = new SemaphoreSlim(1, 1);
 
         if (_pollingInterval < TimeSpan.FromMinutes(1))
@@ -55,6 +60,9 @@ public class CalendarPollingService : ICalendarPollingService
             return Task.CompletedTask; // Already running
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        // Record when the first poll will fire (immediately = now)
+        _pollingSchedule.SetNextFetchAt(_timeProvider.UtcNow);
 
         // Start timer with immediate first poll, then at configured interval
         _timer = new Timer(
@@ -105,6 +113,10 @@ public class CalendarPollingService : ICalendarPollingService
 
         try
         {
+            // Schedule the next fetch now that this one is starting.
+            // This gives the UI an accurate countdown to the following cycle.
+            _pollingSchedule.SetNextFetchAt(_timeProvider.UtcNow + _pollingInterval);
+
             // Use UTC time throughout - local time conversion happens only in UI
             // TODO: Double-check this logic, we're mixing local time and UTC time in a weird way
             // What we want is for the local "today" bounds translated to UTC so items near midnight UTC are displayed in the correct day
