@@ -1,5 +1,4 @@
 using MeetingReminder.Application.UseCases;
-using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Notifications;
 using Microsoft.Extensions.Logging;
 
@@ -26,15 +25,11 @@ public class NotificationProcessingService : IDisposable
     /// <summary>
     /// Creates a new instance of the NotificationProcessingService.
     /// </summary>
-    /// <param name="strategies">All available notification strategies</param>
-    /// <param name="config">Application configuration</param>
     /// <param name="logger">Optional logger</param>
     public NotificationProcessingService(
-        IEnumerable<INotificationStrategy> strategies,
         UpdateAllNotificationLevels updateAllNotificationLevels,
         NotifyUser executeNotificationStrategies,
         ISilenceService silenceService,
-        IAppConfiguration config,
         ILogger<NotificationProcessingService>? logger = null)
     {
         _updateAllNotificationLevels = updateAllNotificationLevels;
