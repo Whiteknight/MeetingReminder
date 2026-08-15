@@ -29,8 +29,8 @@ public sealed record CalendarError(
     public static CalendarError NoSourcesConfigured()
         => new("No calendar sources configured", default);
 
-    public static CalendarError AllSourcesFailed(int errorCount, string errorMessages)
-        => new($"All {errorCount} calendar sources failed: {errorMessages}", new CalendarName("aggregate"));
+    public static CalendarError AllSourcesFailed(List<CalendarError> errors)
+        => new($"All {errors.Count} calendar sources failed: {string.Join("; ", errors.Select(e => $"{e.CalendarSource}: {e.Message}"))}", new CalendarName("aggregate"));
 
     public static CalendarError NoEventsFound()
         => new("No events found from any calendar source", default);

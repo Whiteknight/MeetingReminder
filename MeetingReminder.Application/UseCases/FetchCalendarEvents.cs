@@ -35,7 +35,7 @@ public class FetchCalendarEvents
     /// Result containing aggregated and enriched meeting events from all successful sources,
     /// or a CalendarError if all sources failed.
     /// </returns>
-    public async Task<Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, CalendarError>> Fetch(
+    public async Task<Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, Error>> Fetch(
         FetchCalendarEventsQuery query,
         CancellationToken cancellationToken)
     {
@@ -62,50 +62,40 @@ public class FetchCalendarEvents
             query.EndTime,
             cancellationToken);
 
-        return result.Match(
-            events => new SourceFetchResult(source.Name, events, null),
-            error => new SourceFetchResult(source.Name, null, error));
+        return result.Match<SourceFetchResult>(
+            events => new SourceFetchSuccess(source.Name, events),
+            error => new SourceFetchFailure(source.Name, error));
     }
 
-    private Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, CalendarError> AggregateAndEnrichResults(
+    private Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, Error> AggregateAndEnrichResults(
         SourceFetchResult[] results)
     {
-        var eventsByCalendar = new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>();
-        var errors = new List<CalendarError>();
+        // = new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>();
+        var eventsByCalendar = results.OfType<SourceFetchSuccess>()
+            .GroupBy(success => success.SourceName)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<MeetingEvent>)group.SelectMany(success => success.Events.Select(EnrichRawEvent)).ToList());
 
-        foreach (var result in results)
-        {
-            if (result.Events is not null)
-            {
-                // Include the calendar even when the event list is empty so that
-                // ConsolidateIncomingMeetings can remove stale entries for that calendar.
-                eventsByCalendar[result.SourceName] = result.Events
-                    .Select(EnrichRawEvent)
-                    .ToList()
-                    .AsReadOnly();
-            }
-            else if (result.Error is not null)
-            {
-                errors.Add(result.Error);
-            }
-        }
+        var errors = results.OfType<SourceFetchFailure>()
+            .Select(f => f.Error)
+            .ToList();
 
         // Succeed if at least one source responded (even with an empty list)
         // TODO: This case is probably always true, since it would only be 0 when there are no
         // configured sources but that case has already been filtered out.
-        if (eventsByCalendar.Count > 0)
-            return eventsByCalendar;
-
-        // All sources errored
-        if (errors.Count == 0)
-            return CalendarError.NoEventsFound();
-
-        if (errors.Count == 1)
-            return errors[0];
-
-        var errorMessages = string.Join("; ", errors.Select(e => $"{e.CalendarSource}: {e.Message}"));
-        return CalendarError.AllSourcesFailed(errors.Count, errorMessages);
+        return eventsByCalendar.Count > 0
+            ? eventsByCalendar
+            : GetError(errors);
     }
+
+    private static Result<IReadOnlyDictionary<CalendarName, IReadOnlyList<MeetingEvent>>, Error> GetError(List<CalendarError> errors)
+        => errors switch
+        {
+            [] => CalendarError.NoEventsFound(),
+            [CalendarError single] => single,
+            var all => CalendarError.AllSourcesFailed(all)
+        };
 
     private MeetingEvent EnrichRawEvent(RawCalendarEvent raw)
         => MeetingEvent.Create(
@@ -120,8 +110,7 @@ public class FetchCalendarEvents
             link: ExtractMeetingLink.Extract(new ExtractMeetingLinkQuery(raw.Description, raw.Location))
                 .Match(l => (MeetingLink?)l, _ => null));
 
-    private record SourceFetchResult(
-        CalendarName SourceName,
-        IReadOnlyList<RawCalendarEvent>? Events,
-        CalendarError? Error);
+    private abstract record SourceFetchResult(CalendarName SourceName);
+    private sealed record SourceFetchSuccess(CalendarName SourceName, IReadOnlyList<RawCalendarEvent> Events) : SourceFetchResult(SourceName);
+    private sealed record SourceFetchFailure(CalendarName SourceName, CalendarError Error) : SourceFetchResult(SourceName);
 }

@@ -2,7 +2,6 @@ using MeetingReminder.Application.UseCases;
 using MeetingReminder.Domain;
 using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
-using MeetingReminder.Domain.Meetings;
 using static MeetingReminder.Domain.Assert;
 
 namespace MeetingReminder.Infrastructure.Calendars;
@@ -121,18 +120,14 @@ public class CalendarPollingService : ICalendarPollingService
             // TODO: Double-check this logic, we're mixing local time and UTC time in a weird way
             // What we want is for the local "today" bounds translated to UTC so items near midnight UTC are displayed in the correct day
             // "The end of the local calendar day should be derived more defensively, e.g. using DateTime.Today converted to UTC or DateTimeOffset."
-            var now = _timeProvider.UtcNow;
-            var localNow = now.ToLocalTime();
+            var localNow = _timeProvider.UtcNow.ToLocalTime();
             var query = new FetchCalendarEventsQuery(
-                StartTime: now,
+                StartTime: _timeProvider.UtcNow,
                 EndTime: new DateTime(localNow.Year, localNow.Month, localNow.Day, 23, 59, 59, DateTimeKind.Local).ToUniversalTime());
 
-            var result = await _fetchCalendarEvents.Fetch(query, cancellationToken);
-            if (result.IsSuccess)
-            {
-                var value = result.GetValueOrDefault(new Dictionary<CalendarName, IReadOnlyList<MeetingEvent>>());
-                await _consolidateIncomingMeetings.Consolidate(value, cancellationToken);
-            }
+            var result = await _fetchCalendarEvents.Fetch(query, cancellationToken)
+                .BindAsync(_consolidateIncomingMeetings.Consolidate, cancellationToken);
+
             // On failure, we don't update the channel - the UI will continue showing
             // the last known state. Errors are logged elsewhere.
         }

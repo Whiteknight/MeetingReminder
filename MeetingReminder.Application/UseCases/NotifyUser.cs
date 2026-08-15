@@ -15,8 +15,7 @@ public sealed class NotifyUser
     {
         // Filter to only enabled and supported strategies (Requirements 9.2, 9.3)
         _enabledStrategies = strategies
-            .Where(s => config.EnabledNotificationStrategies.Contains(s.StrategyName, StringComparer.OrdinalIgnoreCase))
-            .Where(s => s.IsSupported)
+            .Where(s => config.NotificationStrategyIsEnabled(s.StrategyName) && s.IsSupported)
             .ToList();
     }
 
@@ -24,26 +23,27 @@ public sealed class NotifyUser
     {
         var errors = new List<Error>();
         foreach (var strategy in _enabledStrategies)
-        {
-            try
-            {
-                var strategyErrors = await TryExecuteStrategy(meetings, strategy);
-                strategyErrors.OnError(errors.Add);
-            }
-            catch (Exception ex)
-            {
-                // Catch any unexpected exceptions to ensure other strategies still execute (Requirement 12.3)
-                errors.Add(new UnknownException(ex));
-            }
-        }
+            await ExecuteStrategy(meetings, errors, strategy);
         return errors.Count == 0
             ? Unit.Value
             : Error.Flatten(errors);
     }
 
-    private static async Task<Result<Unit, Error>> TryExecuteStrategy(IReadOnlyList<MeetingState> meetings, INotificationStrategy strategy)
+    private static async Task ExecuteStrategy(IReadOnlyList<MeetingState> meetings, List<Error> errors, INotificationStrategy strategy)
     {
-        var errors = new List<Error>();
+        try
+        {
+            await TryExecuteStrategy(meetings, strategy, errors);
+        }
+        catch (Exception ex)
+        {
+            // Catch any unexpected exceptions to ensure other strategies still execute (Requirement 12.3)
+            errors.Add(new UnknownException(ex));
+        }
+    }
+
+    private static async Task TryExecuteStrategy(IReadOnlyList<MeetingState> meetings, INotificationStrategy strategy, List<Error> errors)
+    {
         // Always execute per-cycle notifications (e.g., beeps, sounds)
         var cycleResult = await strategy.ExecuteOnCycleAsync(meetings);
         cycleResult.OnError(errors.Add);
@@ -54,9 +54,5 @@ public sealed class NotifyUser
             var levelChangeResult = await strategy.ExecuteOnLevelChangeAsync(meeting);
             levelChangeResult.OnError(errors.Add);
         }
-
-        return errors.Count == 0
-            ? Unit.Value
-            : new AggregateError(errors);
     }
 }

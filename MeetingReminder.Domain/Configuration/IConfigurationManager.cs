@@ -57,6 +57,9 @@ public interface IAppConfiguration
         => Calendars
             .FirstOrDefault(c => calendarSource.Equals(c.Name, StringComparison.OrdinalIgnoreCase))
             ?.NotificationRules;
+
+    bool NotificationStrategyIsEnabled(string strategyName)
+        => EnabledNotificationStrategies.Contains(strategyName, StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>

@@ -47,7 +47,7 @@ public class CalculateNotificationLevel
     private static bool IsWithinNotificationWindow(
         ICalendarNotificationRules? rules,
         DateTime currentTime)
-        => rules is null || rules.IsWithinNotificationWindow(currentTime);
+        => rules?.IsWithinNotificationWindow(currentTime) != false;
 
     private static NotificationLevel CalculateLevelFromTimeUntilStart(
         MeetingEvent meeting,

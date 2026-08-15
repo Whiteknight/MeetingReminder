@@ -11,10 +11,10 @@ namespace MeetingReminder.Infrastructure.Notifications;
 /// </summary>
 public sealed class SilenceService : ISilenceService
 {
-    private const long NotSilenced = long.MinValue;
+    private const long _notSilenced = long.MinValue;
 
     private readonly ITimeProvider _time;
-    private long _silencedUntilTicks = NotSilenced;
+    private long _silencedUntilTicks = _notSilenced;
 
     public SilenceService(ITimeProvider time)
     {
@@ -27,7 +27,7 @@ public sealed class SilenceService : ISilenceService
         get
         {
             var ticks = Interlocked.Read(ref _silencedUntilTicks);
-            return ticks != NotSilenced && _time.UtcNow.Ticks < ticks;
+            return ticks != _notSilenced && _time.UtcNow.Ticks < ticks;
         }
     }
 
@@ -37,7 +37,7 @@ public sealed class SilenceService : ISilenceService
         get
         {
             var ticks = Interlocked.Read(ref _silencedUntilTicks);
-            return ticks == NotSilenced ? null : new DateTime(ticks, DateTimeKind.Utc);
+            return ticks == _notSilenced ? null : new DateTime(ticks, DateTimeKind.Utc);
         }
     }
 
@@ -50,6 +50,6 @@ public sealed class SilenceService : ISilenceService
     /// <inheritdoc />
     public void Deactivate()
     {
-        Interlocked.Exchange(ref _silencedUntilTicks, NotSilenced);
+        Interlocked.Exchange(ref _silencedUntilTicks, _notSilenced);
     }
 }
