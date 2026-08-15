@@ -1,4 +1,5 @@
 using MeetingReminder.Domain;
+using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
 
 namespace MeetingReminder.Infrastructure.Configuration;
@@ -21,19 +22,21 @@ public record AppConfiguration(
     /// <summary>
     /// Parameterless constructor for YAML deserialization.
     /// </summary>
-    public AppConfiguration() : this(
-        TimeSpan.FromMinutes(5),
-        TimeSpan.FromMinutes(5),
-        ["Beep", "SystemNotification"],
-        NotificationThresholds.Default,
-        [])
+    public AppConfiguration()
+        : this(
+            TimeSpan.FromMinutes(5),
+            TimeSpan.FromMinutes(5),
+            ["Beep", "SystemNotification"],
+            NotificationThresholds.Default,
+            [])
     {
     }
 
     /// <summary>
     /// Gets the enabled notification strategies as a read-only list.
     /// </summary>
-    IReadOnlyList<string> IAppConfiguration.EnabledNotificationStrategies => EnabledNotificationStrategies;
+    IReadOnlyList<string> IAppConfiguration.EnabledNotificationStrategies
+        => EnabledNotificationStrategies;
 
     /// <summary>
     /// Gets the thresholds as the interface type.

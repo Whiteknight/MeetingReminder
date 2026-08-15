@@ -1,6 +1,6 @@
 using MeetingReminder.Domain.Configuration;
 
-namespace MeetingReminder.Infrastructure.Configuration;
+namespace MeetingReminder.Domain.Calendars;
 
 /// <summary>
 /// Configuration for notification escalation timing thresholds.

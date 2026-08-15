@@ -1,6 +1,6 @@
 using MeetingReminder.Domain.Configuration;
 
-namespace MeetingReminder.Infrastructure.Configuration;
+namespace MeetingReminder.Domain.Calendars;
 
 /// <summary>
 /// Per-calendar notification rules that control when and how notifications are triggered
@@ -72,14 +72,16 @@ public record CalendarNotificationRules(
             return false;
 
         // Time of day values must be valid (0-24 hours)
-        if (NotificationWindowStart is not null &&
-            (NotificationWindowStart.Value < TimeSpan.Zero || NotificationWindowStart.Value >= TimeSpan.FromHours(24)))
-            return false;
-
-        if (NotificationWindowEnd is not null &&
-            (NotificationWindowEnd.Value < TimeSpan.Zero || NotificationWindowEnd.Value >= TimeSpan.FromHours(24)))
+        if (!IsValidTimeOfDay(NotificationWindowStart) || !IsValidTimeOfDay(NotificationWindowEnd))
             return false;
 
         return true;
+    }
+
+    private static bool IsValidTimeOfDay(TimeSpan? time)
+    {
+        return time is null ||
+            (time.Value >= TimeSpan.Zero && time.Value < TimeSpan.FromHours(24));
+
     }
 }

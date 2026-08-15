@@ -1,3 +1,4 @@
+using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
 
 namespace MeetingReminder.Infrastructure.Configuration;
@@ -19,11 +20,12 @@ public record CalendarConfiguration(
     /// <summary>
     /// Parameterless constructor for YAML deserialization.
     /// </summary>
-    public CalendarConfiguration() : this(
-        string.Empty,
-        CalendarType.ICal,
-        null,
-        CalendarNotificationRules.Default)
+    public CalendarConfiguration()
+        : this(
+            string.Empty,
+            CalendarType.ICal,
+            null,
+            CalendarNotificationRules.Default)
     {
     }
 
