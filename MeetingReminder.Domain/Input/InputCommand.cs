@@ -4,16 +4,14 @@ namespace MeetingReminder.Domain.Input;
 /// Represents a user command parsed from keyboard input.
 /// Pure data — no side effects.
 /// </summary>
-public abstract record InputCommand
+public enum InputCommand
 {
-    private InputCommand() { }
-
-    public sealed record NavigateUp : InputCommand;
-    public sealed record NavigateDown : InputCommand;
-    public sealed record Acknowledge : InputCommand;
-    public sealed record OpenAndAcknowledge : InputCommand;
-    public sealed record Unacknowledge : InputCommand;
-    public sealed record Silence : InputCommand;
-    public sealed record Quit : InputCommand;
-    public sealed record None : InputCommand;
+    NavigateUp,
+    NavigateDown,
+    Acknowledge,
+    OpenAndAcknowledge,
+    Unacknowledge,
+    Silence,
+    Quit,
+    None
 }

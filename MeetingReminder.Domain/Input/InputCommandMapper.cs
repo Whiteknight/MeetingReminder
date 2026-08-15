@@ -9,14 +9,14 @@ public static class InputCommandMapExtensions
     public static InputCommand MapToInputCommand(this ConsoleKeyInfo keyInfo)
         => keyInfo.Key switch
         {
-            ConsoleKey.UpArrow => new InputCommand.NavigateUp(),
-            ConsoleKey.DownArrow => new InputCommand.NavigateDown(),
-            ConsoleKey.Enter or ConsoleKey.Spacebar => new InputCommand.Acknowledge(),
-            ConsoleKey.O when !HasCtrl(keyInfo) => new InputCommand.OpenAndAcknowledge(),
-            ConsoleKey.C when !HasCtrl(keyInfo) => new InputCommand.Unacknowledge(),
-            ConsoleKey.S when !HasCtrl(keyInfo) => new InputCommand.Silence(),
-            ConsoleKey.Q when !HasCtrl(keyInfo) => new InputCommand.Quit(),
-            _ => new InputCommand.None()
+            ConsoleKey.UpArrow => InputCommand.NavigateUp,
+            ConsoleKey.DownArrow => InputCommand.NavigateDown,
+            ConsoleKey.Enter or ConsoleKey.Spacebar => InputCommand.Acknowledge,
+            ConsoleKey.O when !HasCtrl(keyInfo) => InputCommand.OpenAndAcknowledge,
+            ConsoleKey.C when !HasCtrl(keyInfo) => InputCommand.Unacknowledge,
+            ConsoleKey.S when !HasCtrl(keyInfo) => InputCommand.Silence,
+            ConsoleKey.Q when !HasCtrl(keyInfo) => InputCommand.Quit,
+            _ => InputCommand.None
         };
 
     private static bool HasCtrl(ConsoleKeyInfo keyInfo)
