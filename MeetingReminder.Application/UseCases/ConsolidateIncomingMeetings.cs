@@ -24,7 +24,7 @@ public sealed class ConsolidateIncomingMeetings
         foreach (var (calendarSource, incomingMeetings) in events)
         {
             _meetings.GetAllByCalendar(calendarSource)
-                .Bind(existing => ConsolidateSingleSource(existing, incomingMeetings))
+                .Bind(incomingMeetings, ConsolidateSingleSource)
                 .Bind(RemoveRemainingItems)
                 .OnError(errors.Add);
         }
@@ -40,7 +40,6 @@ public sealed class ConsolidateIncomingMeetings
         var existing = existingList.ToDictionary(e => e.Event.Id);
         foreach (var incoming in incomingMeetings)
         {
-            // TODO: .Add() and .Update() can both return errors in theory. We should handle those.
             if (!existing.ContainsKey(incoming.Id))
             {
                 _meetings.Add(MeetingState.New(incoming))

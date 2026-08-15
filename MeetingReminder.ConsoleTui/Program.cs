@@ -115,7 +115,6 @@ public static class Program
                 services.AddCalendarPolling();
                 services.AddNotificationProcessing();
                 services.AddEnhancedTui();
-                services.AddKeyboardInput();
             });
     }
 }

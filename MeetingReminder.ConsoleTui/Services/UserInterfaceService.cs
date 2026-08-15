@@ -19,7 +19,6 @@ public class UserInterfaceService : BackgroundService
     private const int _maxRows = 10;
 
     private readonly IMeetingRepository _meetings;
-    private readonly InputCommandMapper _keyboardInputHandler;
     private readonly AcknowledgeMeeting _acknowledgeMeeting;
     private readonly UnacknowledgeMeeting _unacknowledgeMeeting;
     private readonly ISilenceService _silenceService;
@@ -34,7 +33,6 @@ public class UserInterfaceService : BackgroundService
 
     public UserInterfaceService(
         IMeetingRepository meetings,
-        InputCommandMapper keyboardInputHandler,
         AcknowledgeMeeting acknowledgeMeeting,
         UnacknowledgeMeeting unacknowledgeMeeting,
         ISilenceService silenceService,
@@ -46,7 +44,6 @@ public class UserInterfaceService : BackgroundService
         ILogger<UserInterfaceService> logger)
     {
         _meetings = meetings;
-        _keyboardInputHandler = keyboardInputHandler;
         _acknowledgeMeeting = acknowledgeMeeting;
         _unacknowledgeMeeting = unacknowledgeMeeting;
         _silenceService = silenceService;
@@ -112,7 +109,7 @@ public class UserInterfaceService : BackgroundService
 
     private async Task ProcessKeyboardInput(ConsoleKeyInfo key, IReadOnlyList<MeetingState> meetings, CancellationToken stoppingToken)
     {
-        switch (_keyboardInputHandler.MapKey(key))
+        switch (key.MapToInputCommand())
         {
             case InputCommand.NavigateUp:
                 NavigateUp(meetings);

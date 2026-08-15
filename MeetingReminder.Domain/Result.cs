@@ -52,6 +52,21 @@ public static class Result
             return ex;
         }
     }
+
+    public static Result<T, Error> First<T, TData>(TData data, params Func<TData, Result<T, Error>>[] funcs)
+    {
+        if (funcs.Length == 0)
+            return new NoOperationsError();
+
+        for (int i = 0; i < funcs.Length - 1; i++)
+        {
+            var result = funcs[i](data);
+            if (result.IsSuccess)
+                return result;
+        }
+
+        return funcs[funcs.Length - 1](data);
+    }
 }
 
 public readonly record struct Result<T, TE1> : IEquatable<T>

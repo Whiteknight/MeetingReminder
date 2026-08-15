@@ -4,33 +4,20 @@ namespace MeetingReminder.Domain.Input;
 /// Pure mapper: ConsoleKeyInfo → TuiCommand.
 /// Has no dependencies on TUI state, use cases, or application lifetime.
 /// </summary>
-public class InputCommandMapper
+public static class InputCommandMapExtensions
 {
-    public InputCommand MapKey(ConsoleKeyInfo keyInfo)
-    {
-        if (keyInfo.Key == ConsoleKey.UpArrow)
-            return new InputCommand.NavigateUp();
-
-        if (keyInfo.Key == ConsoleKey.DownArrow)
-            return new InputCommand.NavigateDown();
-
-        if (keyInfo.Key == ConsoleKey.Enter || keyInfo.Key == ConsoleKey.Spacebar)
-            return new InputCommand.Acknowledge();
-
-        if (keyInfo.Key == ConsoleKey.O && !HasCtrl(keyInfo))
-            return new InputCommand.OpenAndAcknowledge();
-
-        if (keyInfo.Key == ConsoleKey.C && !HasCtrl(keyInfo))
-            return new InputCommand.Unacknowledge();
-
-        if (keyInfo.Key == ConsoleKey.S && !HasCtrl(keyInfo))
-            return new InputCommand.Silence();
-
-        if (keyInfo.Key == ConsoleKey.Q && !HasCtrl(keyInfo))
-            return new InputCommand.Quit();
-
-        return new InputCommand.None();
-    }
+    public static InputCommand MapToInputCommand(this ConsoleKeyInfo keyInfo)
+        => keyInfo.Key switch
+        {
+            ConsoleKey.UpArrow => new InputCommand.NavigateUp(),
+            ConsoleKey.DownArrow => new InputCommand.NavigateDown(),
+            ConsoleKey.Enter or ConsoleKey.Spacebar => new InputCommand.Acknowledge(),
+            ConsoleKey.O when !HasCtrl(keyInfo) => new InputCommand.OpenAndAcknowledge(),
+            ConsoleKey.C when !HasCtrl(keyInfo) => new InputCommand.Unacknowledge(),
+            ConsoleKey.S when !HasCtrl(keyInfo) => new InputCommand.Silence(),
+            ConsoleKey.Q when !HasCtrl(keyInfo) => new InputCommand.Quit(),
+            _ => new InputCommand.None()
+        };
 
     private static bool HasCtrl(ConsoleKeyInfo keyInfo)
         => keyInfo.Modifiers.HasFlag(ConsoleModifiers.Control);

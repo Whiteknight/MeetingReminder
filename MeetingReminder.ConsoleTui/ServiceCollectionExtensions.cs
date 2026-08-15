@@ -4,7 +4,6 @@ using MeetingReminder.Domain;
 using MeetingReminder.Domain.Browsers;
 using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
-using MeetingReminder.Domain.Input;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
 using MeetingReminder.Infrastructure.Browser;
@@ -148,16 +147,6 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<AcknowledgeMeeting>();
         services.AddSingleton<UnacknowledgeMeeting>();
-        return services;
-    }
-
-    /// <summary>
-    /// Adds the keyboard input service as a pure key-to-command mapper.
-    /// No dependencies on TUI state or application lifetime.
-    /// </summary>
-    public static IServiceCollection AddKeyboardInput(this IServiceCollection services)
-    {
-        services.AddSingleton<InputCommandMapper>();
         return services;
     }
 

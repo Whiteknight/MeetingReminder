@@ -40,7 +40,6 @@ public sealed class UpdateAllNotificationLevels
                 Thresholds: _config.Thresholds,
                 Rules: rules));
 
-            // Update notification level (only escalates, never decreases - Requirement 8.5)
             meetings[i] = state.UpdateNotificationLevel(newLevel, _timeProvider.UtcNow);
             _meetings.Update(meetings[i]);
         }

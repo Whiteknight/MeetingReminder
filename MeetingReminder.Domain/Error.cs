@@ -52,3 +52,6 @@ public sealed record UnknownException(Exception Exception)
 
 public sealed record UnknownError(string Message)
     : Error($"Unknown error: {Message}");
+
+public sealed record NoOperationsError()
+    : Error("No operations were performed");

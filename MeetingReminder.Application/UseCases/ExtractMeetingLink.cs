@@ -28,41 +28,42 @@ public static partial class ExtractMeetingLink
         var searchText = CombineSearchText(query.Description, query.Location);
 
         if (string.IsNullOrWhiteSpace(searchText))
-            return MeetingLinkError.NoLinkFound();
+            return NoMeetingLinkFound.Instance;
 
-        // Try video conferencing links first (in priority order)
-        if (TryExtractGoogleMeet(searchText) is { } googleMeet)
-            return googleMeet;
-
-        if (TryExtractZoom(searchText) is { } zoom)
-            return zoom;
-
-        if (TryExtractTeams(searchText) is { } teams)
-            return teams;
-
-        // Fall back to generic URL
-        return ExtractGenericUrl(searchText);
+        return Result.First(
+            searchText,
+            ExtractGoogleMeet,
+            ExtractZoom,
+            ExtractTeams,
+            ExtractGenericUrl
+        );
     }
 
     private static string CombineSearchText(string? description, string? location)
         => $"{description ?? string.Empty} {location ?? string.Empty}";
 
-    private static GoogleMeetLink? TryExtractGoogleMeet(string searchText)
+    private static Result<MeetingLink, Error> ExtractGoogleMeet(string searchText)
     {
         var match = GoogleMeetRegex().Match(searchText);
-        return match.Success ? new GoogleMeetLink(match.Value) : null;
+        return match.Success
+            ? new GoogleMeetLink(match.Value)
+            : NoMeetingLinkFound.Instance;
     }
 
-    private static ZoomLink? TryExtractZoom(string searchText)
+    private static Result<MeetingLink, Error> ExtractZoom(string searchText)
     {
         var match = ZoomRegex().Match(searchText);
-        return match.Success ? new ZoomLink(match.Value) : null;
+        return match.Success
+            ? new ZoomLink(match.Value)
+            : NoMeetingLinkFound.Instance;
     }
 
-    private static MicrosoftTeamsLink? TryExtractTeams(string searchText)
+    private static Result<MeetingLink, Error> ExtractTeams(string searchText)
     {
         var match = TeamsRegex().Match(searchText);
-        return match.Success ? new MicrosoftTeamsLink(match.Value) : null;
+        return match.Success
+            ? new MicrosoftTeamsLink(match.Value)
+            : NoMeetingLinkFound.Instance;
     }
 
     private static Result<MeetingLink, Error> ExtractGenericUrl(string searchText)
@@ -70,7 +71,7 @@ public static partial class ExtractMeetingLink
         var match = GenericUrlRegex().Match(searchText);
         return match.Success
             ? new OtherLink(CleanUrl(match.Value))
-            : MeetingLinkError.NoLinkFound();
+            : NoMeetingLinkFound.Instance;
     }
 
     private static string CleanUrl(string url)
