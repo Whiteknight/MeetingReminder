@@ -1,7 +1,8 @@
+using MeetingReminder.Domain.Browsers;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
-using MeetingReminder.Infrastructure.Browser;
 using MeetingReminder.Infrastructure.Notifications;
+using MeetingReminder.Infrastructure.Windows.Browser;
 using MeetingReminder.Infrastructure.Windows.Notifications;
 
 var testMeeting = MeetingEvent.Create(
@@ -90,7 +91,7 @@ if (runBrowserTests)
     Console.WriteLine("=== Browser Launcher Tests ===");
     Console.WriteLine();
 
-    var browserLauncher = new SystemBrowserLauncher();
+    var browserLauncher = new WindowsBrowserLauncher();
 
     // Browser Test 1: Simple HTTPS URL
     results.Add(RunBrowserTest(
@@ -232,7 +233,7 @@ static void PrintSummary(List<TestResult> results)
 static TestResult RunBrowserTest(
     string testName,
     string expectation,
-    SystemBrowserLauncher browserLauncher,
+    IBrowserLauncher browserLauncher,
     string url)
 {
     while (true)

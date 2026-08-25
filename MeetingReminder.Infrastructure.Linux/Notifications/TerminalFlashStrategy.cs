@@ -14,7 +14,7 @@ public class TerminalFlashStrategy : INotificationStrategy
 {
     public string StrategyName => "TerminalFlash";
 
-    public bool IsSupported => OperatingSystem.IsLinux();
+    public bool IsSupported => true;
 
     /// <summary>
     /// Terminal flash doesn't execute on every cycle to avoid notification spam.
@@ -35,9 +35,6 @@ public class TerminalFlashStrategy : INotificationStrategy
 
     private Result<Unit, NotificationError> Execute(MeetingState meeting)
     {
-        if (!IsSupported)
-            return new NotificationError("Terminal flash is not supported on this platform", StrategyName);
-
         var level = meeting.CurrentLevel;
         if (level == NotificationLevel.None)
         {

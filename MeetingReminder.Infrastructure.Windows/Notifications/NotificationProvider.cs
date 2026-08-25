@@ -9,14 +9,10 @@ namespace MeetingReminder.Infrastructure.Windows.Notifications;
 /// </summary>
 public class NotificationProvider : ISystemNotificationProvider
 {
-    public bool IsSupported => OperatingSystem.IsWindows();
+    public bool IsSupported => true;
 
     public Task ShowNotificationAsync(string title, string body, NotificationLevel level)
-    {
-        if (!IsSupported)
-            return Task.CompletedTask;
-
-        var builder = new ToastContentBuilder()
+    {        var builder = new ToastContentBuilder()
             .SetToastDuration(ToastDuration.Long)
             .AddText(title)
             .AddText(body);

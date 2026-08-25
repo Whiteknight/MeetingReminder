@@ -1,6 +1,13 @@
 ﻿using System.Text;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Infrastructure.Configuration;
+#if WINDOWS
+using MeetingReminder.Infrastructure.Windows;
+using WindowsConfigPathResolver = MeetingReminder.Infrastructure.Windows.Configuration.ConfigPathResolver;
+#elif LINUX
+using MeetingReminder.Infrastructure.Linux;
+using LinuxConfigPathResolver = MeetingReminder.Infrastructure.Linux.Configuration.ConfigPathResolver;
+#endif
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -14,7 +21,7 @@ public static class Program
         Console.OutputEncoding = Encoding.UTF8;
         Console.Title = "nag";
 
-        var pathResolver = new ConfigPathResolver();
+        var pathResolver = CreateConfigPathResolver();
 
         // Validate configuration before starting the host
         var configValidationResult = ValidateConfiguration(pathResolver);
@@ -58,10 +65,24 @@ public static class Program
     }
 
     /// <summary>
+    /// Creates the platform-specific configuration path resolver.
+    /// </summary>
+    private static IConfigPathResolver CreateConfigPathResolver()
+    {
+#if WINDOWS
+        return new WindowsConfigPathResolver();
+#elif LINUX
+        return new LinuxConfigPathResolver();
+#else
+#error Unsupported platform. Add a platform-specific ConfigPathResolver for this OS.
+#endif
+    }
+
+    /// <summary>
     /// Validates the configuration file before starting the application.
     /// Handles first-run setup (config creation + exit signal).
     /// </summary>
-    private static bool ValidateConfiguration(ConfigPathResolver pathResolver)
+    private static bool ValidateConfiguration(IConfigPathResolver pathResolver)
     {
         var configManager = new YamlConfigurationManager(pathResolver);
         var result = configManager.LoadConfiguration();
@@ -94,7 +115,7 @@ public static class Program
             });
     }
 
-    private static IHostBuilder CreateHostBuilder(string[] args, ConfigPathResolver pathResolver)
+    private static IHostBuilder CreateHostBuilder(string[] args, IConfigPathResolver pathResolver)
     {
         return Host.CreateDefaultBuilder(args)
             .ConfigureLogging(logging =>
@@ -105,9 +126,13 @@ public static class Program
             .ConfigureServices((_, services) =>
             {
                 services.AddCoreInfrastructure();
+#if WINDOWS
+                services.AddWindowsPlatformServices(pathResolver);
+#elif LINUX
+                services.AddLinuxPlatformServices(pathResolver);
+#endif
                 services.AddConfiguration(pathResolver);
                 services.AddMeetingRepository();
-                services.AddBrowserLauncher();
                 services.AddCalendarSources();
                 services.AddCalendarUseCases();
                 services.AddNotificationUseCases();

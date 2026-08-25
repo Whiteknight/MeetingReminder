@@ -16,14 +16,10 @@ public class NotificationProvider : ISystemNotificationProvider
         _notifySendAvailable = IsNotifySendAvailable();
     }
 
-    public bool IsSupported => OperatingSystem.IsLinux() && _notifySendAvailable;
+    public bool IsSupported => true;
 
     public async Task ShowNotificationAsync(string title, string body, NotificationLevel level)
-    {
-        if (!IsSupported)
-            return;
-
-        var urgency = GetUrgency(level);
+    {        var urgency = GetUrgency(level);
         var expireTime = GetExpireTime(level);
         var icon = GetIcon(level);
 

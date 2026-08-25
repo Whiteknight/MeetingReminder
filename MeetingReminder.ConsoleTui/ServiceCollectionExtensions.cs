@@ -1,12 +1,10 @@
 using MeetingReminder.Application.UseCases;
 using MeetingReminder.ConsoleTui.Services;
 using MeetingReminder.Domain;
-using MeetingReminder.Domain.Browsers;
 using MeetingReminder.Domain.Calendars;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Domain.Meetings;
 using MeetingReminder.Domain.Notifications;
-using MeetingReminder.Infrastructure.Browser;
 using MeetingReminder.Infrastructure.Calendars;
 using MeetingReminder.Infrastructure.Configuration;
 using MeetingReminder.Infrastructure.ICal;
@@ -34,12 +32,13 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Adds configuration services using the specified path resolver.
+    /// The IConfigPathResolver singleton is registered by AddPlatformServices (in Program.cs)
+    /// before this method is called.
     /// </summary>
     public static IServiceCollection AddConfiguration(
         this IServiceCollection services,
         IConfigPathResolver pathResolver)
     {
-        services.AddSingleton<IConfigPathResolver>(pathResolver);
         services.AddSingleton<IConfigurationManager>(
             _ => new YamlConfigurationManager(pathResolver));
 
@@ -132,15 +131,6 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Adds the browser launcher for opening meeting links.
-    /// </summary>
-    public static IServiceCollection AddBrowserLauncher(this IServiceCollection services)
-    {
-        services.AddSingleton<IBrowserLauncher, SystemBrowserLauncher>();
-        return services;
-    }
-
-    /// <summary>
     /// Adds the AcknowledgeMeeting and UnacknowledgeMeeting use cases.
     /// </summary>
     public static IServiceCollection AddAcknowledgementUseCases(this IServiceCollection services)
@@ -163,39 +153,14 @@ public static class ServiceCollectionExtensions
 
     /// <summary>
     /// Adds the notification processing service and silence service.
+    /// Platform-specific notification strategies are registered by AddPlatformServices
+    /// in Program.cs before this method is called.
     /// </summary>
     public static IServiceCollection AddNotificationProcessing(this IServiceCollection services)
     {
-        // Register platform-specific notification strategies
-        services.AddNotificationStrategies();
-
         services.AddSingleton<ISilenceService, SilenceService>();
         services.AddSingleton<NotificationProcessingService>();
-
         services.AddHostedService<NotificationProcessingHostedService>();
-
-        return services;
-    }
-
-    /// <summary>
-    /// Adds platform-specific notification strategies.
-    /// </summary>
-    public static IServiceCollection AddNotificationStrategies(this IServiceCollection services)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            // Windows-specific notification providers
-            services.AddSingleton<ISystemNotificationProvider, MeetingReminder.Infrastructure.Windows.Notifications.NotificationProvider>();
-            services.AddSingleton<INotificationStrategy, SystemNotificationStrategy>();
-            services.AddSingleton<INotificationStrategy, MeetingReminder.Infrastructure.Windows.Notifications.BeepNotificationStrategy>();
-            return services;
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            services.AddSingleton<IEnumerable<INotificationStrategy>>(_ => []);
-        }
-
         return services;
     }
 }

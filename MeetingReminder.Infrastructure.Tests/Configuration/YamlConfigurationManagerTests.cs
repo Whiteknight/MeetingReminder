@@ -1,6 +1,7 @@
 using AwesomeAssertions;
 using MeetingReminder.Domain.Configuration;
 using MeetingReminder.Infrastructure.Configuration;
+using NSubstitute;
 using NUnit.Framework;
 
 namespace MeetingReminder.Infrastructure.Tests.Configuration;
@@ -9,14 +10,18 @@ namespace MeetingReminder.Infrastructure.Tests.Configuration;
 public sealed class YamlConfigurationManagerTests
 {
     private string _testDirectory = null!;
-    private ConfigPathResolver _pathResolver = null!;
+    private IConfigPathResolver _pathResolver = null!;
 
     [SetUp]
     public void SetUp()
     {
         _testDirectory = Path.Combine(Path.GetTempPath(), $"NagTests_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testDirectory);
-        _pathResolver = new ConfigPathResolver(_testDirectory);
+
+        _pathResolver = Substitute.For<IConfigPathResolver>();
+        _pathResolver.GetConfigDirectory().Returns(_testDirectory);
+        _pathResolver.GetConfigFilePath().Returns(Path.Combine(_testDirectory, "config.yaml"));
+        _pathResolver.GetTemplateFilePath().Returns(Path.Combine(_testDirectory, "config.template.yaml"));
     }
 
     [TearDown]
@@ -29,13 +34,10 @@ public sealed class YamlConfigurationManagerTests
     [Test]
     public void LoadConfiguration_WhenFileDoesNotExist_PerformsFirstRunSetup()
     {
-        // Arrange
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
         var result = manager.LoadConfiguration();
 
-        // Assert
         result.IsError.Should().BeTrue();
         result.Switch(
             _ => throw new AssertionException("Expected error but got success"),
@@ -45,7 +47,6 @@ public sealed class YamlConfigurationManagerTests
                 error.Message.Should().Contain("Edit config.yaml to add your calendars");
             });
 
-        // Verify files were created
         File.Exists(_pathResolver.GetConfigFilePath()).Should().BeTrue();
         File.Exists(_pathResolver.GetTemplateFilePath()).Should().BeTrue();
     }
@@ -53,14 +54,11 @@ public sealed class YamlConfigurationManagerTests
     [Test]
     public void LoadConfiguration_WhenFileIsEmpty_ReturnsDefaultConfiguration()
     {
-        // Arrange
         File.WriteAllText(_pathResolver.GetConfigFilePath(), string.Empty);
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
         var result = manager.LoadConfiguration();
 
-        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Switch(
             config => config.PollingInterval.Should().Be(TimeSpan.FromMinutes(5)),
@@ -70,28 +68,22 @@ public sealed class YamlConfigurationManagerTests
     [Test]
     public void LoadConfiguration_WhenFileContainsOnlyWhitespace_ReturnsDefaultConfiguration()
     {
-        // Arrange
         File.WriteAllText(_pathResolver.GetConfigFilePath(), "   \n\t  ");
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
         var result = manager.LoadConfiguration();
 
-        // Assert
         result.IsSuccess.Should().BeTrue();
     }
 
     [Test]
     public void LoadConfiguration_WhenYamlIsMalformed_ReturnsConfigurationError()
     {
-        // Arrange
         File.WriteAllText(_pathResolver.GetConfigFilePath(), "pollingInterval: [invalid: yaml: {{");
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
         var result = manager.LoadConfiguration();
 
-        // Assert
         result.IsError.Should().BeTrue();
         result.Switch(
             _ => throw new AssertionException("Expected error but got success"),
@@ -105,7 +97,6 @@ public sealed class YamlConfigurationManagerTests
     [Test]
     public void LoadConfiguration_WhenPollingIntervalTooShort_ReturnsValidationError()
     {
-        // Arrange
         File.WriteAllText(_pathResolver.GetConfigFilePath(), """
             pollingInterval: "00:00:30"
             enabledNotificationStrategies:
@@ -119,10 +110,8 @@ public sealed class YamlConfigurationManagerTests
             """);
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
         var result = manager.LoadConfiguration();
 
-        // Assert
         result.IsError.Should().BeTrue();
         result.Switch(
             _ => throw new AssertionException("Expected error but got success"),
@@ -132,7 +121,6 @@ public sealed class YamlConfigurationManagerTests
     [Test]
     public void LoadConfiguration_WhenValidYaml_ReturnsLoadedConfiguration()
     {
-        // Arrange
         File.WriteAllText(_pathResolver.GetConfigFilePath(), """
             pollingInterval: "00:10:00"
             enabledNotificationStrategies:
@@ -154,10 +142,8 @@ public sealed class YamlConfigurationManagerTests
             """);
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
         var result = manager.LoadConfiguration();
 
-        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Switch(
             config =>
@@ -178,34 +164,12 @@ public sealed class YamlConfigurationManagerTests
     [Test]
     public void LoadConfiguration_FirstRunCreatesDefaultConfigYaml()
     {
-        // Arrange
         var manager = new YamlConfigurationManager(_pathResolver);
 
-        // Act
-        manager.LoadConfiguration(); // triggers first-run
+        manager.LoadConfiguration();
 
-        // Assert - the created config.yaml should be parseable
         var content = File.ReadAllText(_pathResolver.GetConfigFilePath());
         content.Should().NotBeNullOrWhiteSpace();
         content.Should().Contain("pollingInterval");
-    }
-
-    [Test]
-    public void ConfigPathResolver_OnWindows_UsesAppData()
-    {
-        if (!OperatingSystem.IsWindows())
-        {
-            Assert.Ignore("Windows-only test");
-            return;
-        }
-
-        var resolver = new ConfigPathResolver();
-        var expected = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "nag");
-
-        resolver.GetConfigDirectory().Should().Be(expected);
-        resolver.GetConfigFilePath().Should().Be(Path.Combine(expected, "config.yaml"));
-        resolver.GetTemplateFilePath().Should().Be(Path.Combine(expected, "config.template.yaml"));
     }
 }

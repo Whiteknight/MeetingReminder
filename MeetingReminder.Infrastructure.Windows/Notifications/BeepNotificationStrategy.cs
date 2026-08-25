@@ -13,16 +13,13 @@ public class BeepNotificationStrategy : INotificationStrategy
 {
     public string StrategyName => "Beep";
 
-    public bool IsSupported => OperatingSystem.IsWindows();
+    public bool IsSupported => true;
 
     /// <summary>
     /// Executes beep on every polling cycle for persistent audio reminders.
     /// </summary>
     public async Task<Result<NotificationLevel, NotificationError>> ExecuteOnCycleAsync(IReadOnlyList<MeetingState> meetings)
     {
-        if (!IsSupported)
-            return new NotificationError("Beep notification is not supported on this platform", StrategyName);
-
         var level = meetings.Max(m => m.CurrentLevel);
         if (level == NotificationLevel.None || level == NotificationLevel.Gentle)
             return NotificationLevel.None;

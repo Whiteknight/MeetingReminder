@@ -14,7 +14,7 @@ public class TerminalFlashStrategy : INotificationStrategy
 {
     public string StrategyName => "TerminalFlash";
 
-    public bool IsSupported => OperatingSystem.IsWindows();
+    public bool IsSupported => true;
 
     /// <summary>
     /// Terminal flash doesn't execute on every cycle to avoid excessive visual distraction.
@@ -30,9 +30,6 @@ public class TerminalFlashStrategy : INotificationStrategy
 
     private Result<Unit, NotificationError> Execute(NotificationLevel level)
     {
-        if (!IsSupported)
-            return new NotificationError("Terminal flash is not supported on this platform", StrategyName);
-
         if (level == NotificationLevel.None)
             return Unit.Value;
 
