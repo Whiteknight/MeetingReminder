@@ -25,10 +25,12 @@ public static partial class ExtractMeetingLink
     /// <returns>A Result containing the extracted MeetingLink or an error if none found</returns>
     public static Result<MeetingLink, Error> Extract(ExtractMeetingLinkQuery query)
     {
-        var searchText = CombineSearchText(query.Description, query.Location);
+        var rawText = CombineSearchText(query.Description, query.Location);
 
-        if (string.IsNullOrWhiteSpace(searchText))
+        if (string.IsNullOrWhiteSpace(rawText))
             return NoMeetingLinkFound.Instance;
+
+        var searchText = UrlDefenseDecoder.UnwrapAll(rawText);
 
         return Result.First(
             searchText,
