@@ -116,14 +116,9 @@ public class CalendarPollingService : ICalendarPollingService
             // This gives the UI an accurate countdown to the following cycle.
             _pollingSchedule.SetNextFetchAt(_timeProvider.UtcNow + _pollingInterval);
 
-            // Use UTC time throughout - local time conversion happens only in UI
-            // TODO: Double-check this logic, we're mixing local time and UTC time in a weird way
-            // What we want is for the local "today" bounds translated to UTC so items near midnight UTC are displayed in the correct day
-            // "The end of the local calendar day should be derived more defensively, e.g. using DateTime.Today converted to UTC or DateTimeOffset."
-            var localNow = _timeProvider.UtcNow.ToLocalTime();
             var query = new FetchCalendarEventsQuery(
-                StartTime: _timeProvider.UtcNow,
-                EndTime: new DateTime(localNow.Year, localNow.Month, localNow.Day, 23, 59, 59, DateTimeKind.Local).ToUniversalTime());
+                StartTime: BuildLocalDayStartUtc(_timeProvider.UtcNow),
+                EndTime: BuildLocalDayEndUtc(_timeProvider.UtcNow));
 
             var result = await _fetchCalendarEvents.Fetch(query, cancellationToken)
                 .BindAsync(_consolidateIncomingMeetings.Consolidate, cancellationToken);
@@ -135,6 +130,28 @@ public class CalendarPollingService : ICalendarPollingService
         {
             _pollLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Returns the UTC instant corresponding to local midnight (start of today) for the
+    /// calendar day that contains <paramref name="utcNow"/> in the system local timezone.
+    /// </summary>
+    private static DateTime BuildLocalDayStartUtc(DateTime utcNow)
+    {
+        var localNow = new DateTimeOffset(utcNow, TimeSpan.Zero).ToLocalTime();
+        var localMidnight = new DateTimeOffset(localNow.Year, localNow.Month, localNow.Day, 0, 0, 0, localNow.Offset);
+        return localMidnight.UtcDateTime;
+    }
+
+    /// <summary>
+    /// Returns the UTC instant corresponding to 23:59:59 local time (end of today) for the
+    /// calendar day that contains <paramref name="utcNow"/> in the system local timezone.
+    /// </summary>
+    private static DateTime BuildLocalDayEndUtc(DateTime utcNow)
+    {
+        var localNow = new DateTimeOffset(utcNow, TimeSpan.Zero).ToLocalTime();
+        var localEndOfDay = new DateTimeOffset(localNow.Year, localNow.Month, localNow.Day, 23, 59, 59, localNow.Offset);
+        return localEndOfDay.UtcDateTime;
     }
 
     private void ThrowIfDisposed()

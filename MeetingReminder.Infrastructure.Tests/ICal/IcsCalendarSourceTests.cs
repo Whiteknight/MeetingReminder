@@ -355,6 +355,61 @@ END:VCALENDAR";
         events[0].Id.Should().Be("rescheduled-event@example.com_20260220T140000Z");
     }
 
+    // An event at 17:00 Australia/Sydney (UTC+10), meaning its UTC time is 07:00.
+    // When queried with a UTC-based "today" range, a parser that treats the range
+    // as floating (no TZID) would misplace this event, either missing it entirely
+    // or shifting it to the wrong day. With explicit "UTC" bounds the event must
+    // be returned correctly.
+    private const string TzidLateAfternoonEventICalData = @"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:tzid-afternoon@example.com
+DTSTART;TZID=Australia/Sydney:20260220T170000
+DTEND;TZID=Australia/Sydney:20260220T180000
+SUMMARY:Sydney Afternoon Meeting
+DESCRIPTION:Meeting at 5 PM Sydney time
+END:VEVENT
+END:VCALENDAR";
+
+    [Test]
+    public async Task FetchEvents_TzidEventLateAfternoonLocalTime_IsReturnedWithinUtcDayRange()
+    {
+        // 17:00 Sydney (UTC+10) = 07:00 UTC on the same calendar date.
+        // The UTC query window covers the full UTC day so the event must be included.
+        var httpClient = CreateMockHttpClient(TzidLateAfternoonEventICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 2, 20, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 2, 20, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().HaveCount(1);
+        events[0].Title.Should().Be("Sydney Afternoon Meeting");
+        // Confirm the stored time is UTC: 06:00 UTC (Sydney is UTC+11 in February due to daylight saving),
+        // not 17:00 interpreted literally as UTC
+        events[0].StartTime.Should().Be(new DateTime(2026, 2, 20, 6, 0, 0, DateTimeKind.Utc));
+        events[0].StartTime.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Test]
+    public async Task FetchEvents_TzidEventOutsideUtcDayRange_IsExcluded()
+    {
+        // The event is at 07:00 UTC on 2026-02-20. A query for 2026-02-21 must not include it.
+        var httpClient = CreateMockHttpClient(TzidLateAfternoonEventICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 2, 21, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 2, 21, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().BeEmpty();
+    }
+
     private static HttpClient CreateMockHttpClient(string responseContent, HttpStatusCode statusCode)
     {
         var mockHandler = new Mock<HttpMessageHandler>();

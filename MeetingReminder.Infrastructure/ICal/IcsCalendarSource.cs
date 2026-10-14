@@ -77,7 +77,7 @@ public class IcsCalendarSource : ICalendarSource
             if (calendar?.Events == null)
                 return CalendarError.EmptyData(Name);
 
-            return calendar.GetOccurrences(new CalDateTime(startTime)).TakeWhileBefore(new CalDateTime(endTime))
+            return calendar.GetOccurrences(new CalDateTime(startTime, "UTC")).TakeWhileBefore(new CalDateTime(endTime, "UTC"))
                 .Select(MapToRawCalendarEvent)
                 .Where(Result => !Result.IsError)
                 .Select(Result => Result.GetValueOrDefault(null!))

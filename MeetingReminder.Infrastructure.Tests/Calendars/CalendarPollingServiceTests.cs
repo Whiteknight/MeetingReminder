@@ -309,6 +309,103 @@ public class CalendarPollingServiceTests
     }
 
     // -------------------------------------------------------------------------
+    // Query range: "today" in local timezone expressed as UTC bounds
+    // -------------------------------------------------------------------------
+
+    [Test]
+    public async Task PollCycle_QueryStartTime_IsLocalMidnightInUtc()
+    {
+        // _baseTime is 2026-08-06 14:00 UTC.
+        // Local midnight for that instant depends on the machine's timezone, but the
+        // StartTime must be <= UtcNow and have Kind=Utc.
+        var capturingSource = new QueryCapturingCalendarSource("test");
+        var fetchCalendarEvents = new FetchCalendarEvents([capturingSource]);
+        using var service = new CalendarPollingService(
+            fetchCalendarEvents,
+            _consolidateIncomingMeetings,
+            _config,
+            _timeProvider,
+            _pollingSchedule);
+
+        await service.StartAsync();
+        await WaitForConditionAsync(() => capturingSource.LastQuery.HasValue, timeoutMs: 2000);
+        await service.StopAsync();
+
+        var query = capturingSource.LastQuery!.Value;
+        query.StartTime.Kind.Should().Be(DateTimeKind.Utc);
+        // Start must be midnight local time, so it is <= UtcNow (cannot be in the future)
+        query.StartTime.Should().BeOnOrBefore(_baseTime);
+        // Start must be within 24 hours before UtcNow (it is today's midnight, not yesterday's)
+        query.StartTime.Should().BeOnOrAfter(_baseTime.AddHours(-24));
+        // Confirm it really is midnight in the expressed UTC value when shifted back to local
+        query.StartTime.ToLocalTime().TimeOfDay.Should().Be(TimeSpan.Zero);
+    }
+
+    [Test]
+    public async Task PollCycle_QueryEndTime_IsLocalEndOfDayInUtc()
+    {
+        var capturingSource = new QueryCapturingCalendarSource("test");
+        var fetchCalendarEvents = new FetchCalendarEvents([capturingSource]);
+        using var service = new CalendarPollingService(
+            fetchCalendarEvents,
+            _consolidateIncomingMeetings,
+            _config,
+            _timeProvider,
+            _pollingSchedule);
+
+        await service.StartAsync();
+        await WaitForConditionAsync(() => capturingSource.LastQuery.HasValue, timeoutMs: 2000);
+        await service.StopAsync();
+
+        var query = capturingSource.LastQuery!.Value;
+        query.EndTime.Kind.Should().Be(DateTimeKind.Utc);
+        // End-of-day local is 23:59:59; when converted back to local it must reflect that
+        var endLocal = query.EndTime.ToLocalTime();
+        endLocal.Hour.Should().Be(23);
+        endLocal.Minute.Should().Be(59);
+        endLocal.Second.Should().Be(59);
+    }
+
+    [Test]
+    public async Task PollCycle_QueryRange_SpansExactlyOneLocalDay()
+    {
+        var capturingSource = new QueryCapturingCalendarSource("test");
+        var fetchCalendarEvents = new FetchCalendarEvents([capturingSource]);
+        using var service = new CalendarPollingService(
+            fetchCalendarEvents,
+            _consolidateIncomingMeetings,
+            _config,
+            _timeProvider,
+            _pollingSchedule);
+
+        await service.StartAsync();
+        await WaitForConditionAsync(() => capturingSource.LastQuery.HasValue, timeoutMs: 2000);
+        await service.StopAsync();
+
+        var query = capturingSource.LastQuery!.Value;
+        var span = query.EndTime - query.StartTime;
+        // Midnight to 23:59:59 = 86399 seconds, regardless of timezone offset
+        span.Should().Be(TimeSpan.FromSeconds(86399));
+    }
+
+    private sealed class QueryCapturingCalendarSource : ICalendarSource
+    {
+        public QueryCapturingCalendarSource(string sourceName) => Name = new CalendarName(sourceName);
+
+        public CalendarName Name { get; }
+        public FetchCalendarEventsQuery? LastQuery { get; private set; }
+
+        public Task<Result<IReadOnlyList<RawCalendarEvent>, CalendarError>> FetchEvents(
+            DateTime startTime,
+            DateTime endTime,
+            CancellationToken cancellationToken)
+        {
+            LastQuery = new FetchCalendarEventsQuery(startTime, endTime);
+            return Task.FromResult(Result.FromValue<IReadOnlyList<RawCalendarEvent>, CalendarError>([]));
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
