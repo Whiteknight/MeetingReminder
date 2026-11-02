@@ -119,6 +119,67 @@ public class UrlDefenseDecoderTests
         // v3 format: https://urldefense.com/v3/__<url>__;{base64}!{token}
         // The url segment may contain * (single char placeholder) or **X (run placeholder).
         // Placeholders are resolved from a URL-safe base64-decoded byte sequence.
+        //
+        // Real-world Teams meeting links use enc_bytes whose length is a multiple of 4,
+        // meaning NO padding should be added. The earlier code always appended "==" which
+        // produces an invalid base64 string in that case and causes decoding to fail silently.
+        //
+        // The Teams URL structure wraps special chars as * tokens:
+        //   19*3ameeting_<base64id>*40thread.v2/0?context=*7b*22Tid*22*3a*22<guid>*22*2c*22Oid*22*3a*22<guid>*22*7d
+        // Each * is substituted with the next char from dec_bytes (all '%' = 0x25 here),
+        // reconstructing the percent-encoded form: 19%3ameeting_..%40thread..?context=%7b%22...%7d
+
+        // Mirrors the structure of a real Proofpoint-wrapped Teams meeting invite.
+        // Meeting thread ID and tenant/user GUIDs are replaced with dummy values.
+        // enc_bytes = JSUlJSUlJSUlJSUlJSUl (20 chars, mod-4=0, no padding needed) = 15 x '%'
+        private const string TeamsV3WrappedUrl =
+            "https://urldefense.com/v3/__https://teams.microsoft.com/l/meetup-join/" +
+            "19*3ameeting_QWJjRGVmR2hJaktsTW5PcFFyU3RVdld4WXpaQWJj*40thread.v2/0" +
+            "?context=*7b*22Tid*22*3a*22aaaabbbb-1111-2222-3333-ccccddddeeee*22*2c" +
+            "*22Oid*22*3a*22ddddeeee-4444-5555-6666-ffffaaaabbbb*22*7d" +
+            "&launchAgent=GSuiteAddOn&correlationId=11112222-aaaa-bbbb-cccc-333344445555" +
+            "__;JSUlJSUlJSUlJSUlJSUl!!FakeSignatureToken!randombase64sig$";
+
+        private const string ExpectedTeamsUrl =
+            "https://teams.microsoft.com/l/meetup-join/" +
+            "19%3ameeting_QWJjRGVmR2hJaktsTW5PcFFyU3RVdld4WXpaQWJj%40thread.v2/0" +
+            "?context=%7b%22Tid%22%3a%22aaaabbbb-1111-2222-3333-ccccddddeeee%22%2c" +
+            "%22Oid%22%3a%22ddddeeee-4444-5555-6666-ffffaaaabbbb%22%7d" +
+            "&launchAgent=GSuiteAddOn&correlationId=11112222-aaaa-bbbb-cccc-333344445555";
+
+        [Test]
+        public void DecodesV3TeamsUrlWithMod4AlignedEncBytes()
+        {
+            // enc_bytes length 20 is a multiple of 4 — must NOT append any padding.
+            // Prior to the fix, "==" was always appended, giving length 22 which is
+            // invalid base64 and caused Convert.FromBase64String to throw, leaving
+            // the URL undecoded.
+            var result = UrlDefenseDecoder.UnwrapAll(TeamsV3WrappedUrl);
+
+            result.Should().Be(ExpectedTeamsUrl);
+        }
+
+        [Test]
+        public void DecodesV3TeamsUrlEmbeddedInLargerText()
+        {
+            var text = $"Please join: {TeamsV3WrappedUrl} - see you there.";
+
+            var result = UrlDefenseDecoder.UnwrapAll(text);
+
+            result.Should().Be($"Please join: {ExpectedTeamsUrl} - see you there.");
+        }
+
+        [Test]
+        public void DecodesV3TeamsUrl_ResultIsRecognisedAsMicrosoftTeamsLink()
+        {
+            var query = new ExtractMeetingLinkQuery(TeamsV3WrappedUrl, null);
+
+            var result = ExtractMeetingLink.Extract(query);
+
+            result.IsSuccess.Should().BeTrue();
+            result.Match(l => l, _ => null!).Should().BeOfType<MicrosoftTeamsLink>();
+            result.Match(l => l, _ => null!).Url.Should().Be(ExpectedTeamsUrl);
+        }
 
         [Test]
         public void DecodesV3UrlWithNoTokens()

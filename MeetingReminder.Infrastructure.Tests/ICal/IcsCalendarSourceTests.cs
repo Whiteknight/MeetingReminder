@@ -410,6 +410,72 @@ END:VCALENDAR";
         events.Should().BeEmpty();
     }
 
+    // A floating-time event (no TZID on DTSTART/DTEND). Per RFC 5545 floating times carry
+    // no timezone. We treat them as system local time and convert to UTC on ingestion.
+    // DTSTART:20260820T160000 means 16:00 in whatever timezone the local machine is in.
+    private const string FloatingTimeEventICalData = @"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:floating-event@example.com
+DTSTART:20260820T160000
+DTEND:20260820T170000
+SUMMARY:Floating Time Meeting
+DESCRIPTION:Event with no TZID
+END:VEVENT
+END:VCALENDAR";
+
+    [Test]
+    public async Task FetchEvents_FloatingTimeEvent_IsInterpretedAsLocalTime()
+    {
+        // A floating DTSTART of 16:00 must be converted from local time to UTC.
+        // The stored StartTime must therefore NOT equal 16:00 UTC for any machine
+        // that is not on UTC, and its Kind must be Utc.
+        var httpClient = CreateMockHttpClient(FloatingTimeEventICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 8, 20, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().HaveCount(1);
+        events[0].Title.Should().Be("Floating Time Meeting");
+        events[0].StartTime.Kind.Should().Be(DateTimeKind.Utc);
+
+        // The stored UTC time must equal local 16:00 converted to UTC.
+        var expectedUtc = TimeZoneInfo.ConvertTimeToUtc(
+            new DateTime(2026, 8, 20, 16, 0, 0, DateTimeKind.Unspecified),
+            TimeZoneInfo.Local);
+        events[0].StartTime.Should().Be(expectedUtc);
+    }
+
+    [Test]
+    public async Task FetchEvents_FloatingTimeEvent_InstanceIdEndsWithLiteralZ()
+    {
+        // The Z suffix in the instance ID is always a literal UTC marker.
+        // It must be present regardless of whether the source event had a TZID.
+        var httpClient = CreateMockHttpClient(FloatingTimeEventICalData, HttpStatusCode.OK);
+        var source = new IcsCalendarSource(httpClient, "https://example.com/calendar.ics", "Test Calendar");
+        var startTime = new DateTime(2026, 8, 20, 0, 0, 0, DateTimeKind.Utc);
+        var endTime = new DateTime(2026, 8, 20, 23, 59, 59, DateTimeKind.Utc);
+
+        var result = await source.FetchEvents(startTime, endTime, CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        var events = result.Match(e => e, _ => null!);
+        events.Should().HaveCount(1);
+        events[0].Id.Should().StartWith("floating-event@example.com_");
+        events[0].Id.Should().EndWith("Z");
+        // The timestamp portion must be the UTC digits, not the local digits
+        var expectedTimestamp = TimeZoneInfo.ConvertTimeToUtc(
+            new DateTime(2026, 8, 20, 16, 0, 0, DateTimeKind.Unspecified),
+            TimeZoneInfo.Local)
+            .ToString("yyyyMMddTHHmmss");
+        events[0].Id.Should().Be($"floating-event@example.com_{expectedTimestamp}Z");
+    }
+
     private static HttpClient CreateMockHttpClient(string responseContent, HttpStatusCode statusCode)
     {
         var mockHandler = new Mock<HttpMessageHandler>();

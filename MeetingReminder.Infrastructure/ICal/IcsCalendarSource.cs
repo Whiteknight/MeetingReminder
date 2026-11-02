@@ -105,7 +105,7 @@ public class IcsCalendarSource : ICalendarSource
             // - Recurring event occurrences on different days each get a unique ID
             // - A rescheduled meeting gets a new ID, ensuring stale acknowledgements don't carry over
             var uid = calendarEvent.Uid ?? Guid.NewGuid().ToString();
-            var instanceId = $"{uid}_{startTime:yyyyMMddTHHmmssZ}";
+            var instanceId = $"{uid}_{startTime:yyyyMMddTHHmmss}Z";
 
             return new RawCalendarEvent(
                 Id: instanceId,
@@ -124,9 +124,20 @@ public class IcsCalendarSource : ICalendarSource
     }
 
     private static DateTime GetDateTimeOrDefault(CalDateTime? icalDateTime, DateTime defaultValue)
-        => icalDateTime == null
-            ? defaultValue
-            : icalDateTime.AsUtc;
+    {
+        if (icalDateTime == null)
+            return defaultValue;
+
+        // A CalDateTime with no TzId is a "floating" time per RFC 5545 - it carries no
+        // timezone information. AsUtc on a floating CalDateTime reinterprets the wall-clock
+        // digits as UTC without conversion, which is wrong for any user not on UTC.
+        // We treat floating times as system local time, which matches the behaviour of
+        // most calendar clients and is the correct choice for a notification application.
+        if (string.IsNullOrEmpty(icalDateTime.TzId))
+            return TimeZoneInfo.ConvertTimeToUtc(icalDateTime.Value, TimeZoneInfo.Local);
+
+        return icalDateTime.AsUtc;
+    }
 
     // Include events that start within the range or are ongoing during the range
     private static bool IsEventInTimeRange(RawCalendarEvent rawEvent, DateTime startTime, DateTime endTime)

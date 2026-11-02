@@ -165,7 +165,9 @@ public static partial class UrlDefenseDecoder
             return encodedUrl;
 
         // Decode the replacement byte sequence.
-        var encBytes = encBytesRaw + "==";
+        // Pad to the next multiple of 4 — do NOT unconditionally append "==" as that
+        // produces an invalid base64 string when the input length is already a multiple of 4.
+        var encBytes = encBytesRaw + new string('=', (4 - encBytesRaw.Length % 4) % 4);
         string decodedBytes;
 
         try
